@@ -15,43 +15,6 @@ ALTER TABLE public.users DROP COLUMN IF EXISTS stripe_customer_id;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS subscription_status text;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS stripe_customer_id text;
 
-create table if not exists public.business_profiles (
-  user_id uuid primary key references public.users (id) on delete cascade,
-  agent_id text references public.agents(id) default 'gmail_followup',
-  business_name text not null,
-  industry text not null,
-  target_customer text not null,
-  core_offer text not null,
-  price_range text not null,
-  differentiator text not null,
-  email_footer text not null default '',
-  sales_assets jsonb not null default '[]'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-ALTER TABLE public.business_profiles
-  DROP COLUMN IF EXISTS silence_threshold_hours;
-
-ALTER TABLE public.business_profiles
-  DROP COLUMN IF EXISTS preferred_tone;
-
-ALTER TABLE public.business_profiles
-  ADD COLUMN IF NOT EXISTS email_footer text not null default '';
-
-create table if not exists public.gmail_connections (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null unique references public.users (id) on delete cascade,
-  agent_id text references public.agents(id) default 'gmail_followup',
-  email text,
-  display_name text,
-  access_token text not null,
-  refresh_token text,
-  token_expiry timestamptz,
-  last_synced_at timestamptz,
-  created_at timestamptz not null default now()
-);
-
 -- =============================================
 -- Agents catalog
 -- =============================================
@@ -98,6 +61,43 @@ ON CONFLICT (id) DO UPDATE SET
   pro_price_inr = EXCLUDED.pro_price_inr,
   status = EXCLUDED.status,
   sort_order = EXCLUDED.sort_order;
+
+create table if not exists public.business_profiles (
+  user_id uuid primary key references public.users (id) on delete cascade,
+  agent_id text references public.agents(id) default 'gmail_followup',
+  business_name text not null,
+  industry text not null,
+  target_customer text not null,
+  core_offer text not null,
+  price_range text not null,
+  differentiator text not null,
+  email_footer text not null default '',
+  sales_assets jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+ALTER TABLE public.business_profiles
+  DROP COLUMN IF EXISTS silence_threshold_hours;
+
+ALTER TABLE public.business_profiles
+  DROP COLUMN IF EXISTS preferred_tone;
+
+ALTER TABLE public.business_profiles
+  ADD COLUMN IF NOT EXISTS email_footer text not null default '';
+
+create table if not exists public.gmail_connections (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null unique references public.users (id) on delete cascade,
+  agent_id text references public.agents(id) default 'gmail_followup',
+  email text,
+  display_name text,
+  access_token text not null,
+  refresh_token text,
+  token_expiry timestamptz,
+  last_synced_at timestamptz,
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.lead_threads (
   id uuid primary key default gen_random_uuid(),
