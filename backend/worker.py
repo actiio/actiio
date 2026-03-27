@@ -83,7 +83,7 @@ def sync_all_gmail_accounts() -> None:
 
 def main() -> None:
     scheduler = BlockingScheduler()
-    scheduler.add_job(sync_all_gmail_accounts, "interval", minutes=3, id="gmail-sync-task", max_instances=1)
+    scheduler.add_job(sync_all_gmail_accounts, "interval", minutes=20, id="gmail-sync-task", max_instances=1)
 
     # Run once immediately
     sync_all_gmail_accounts()
