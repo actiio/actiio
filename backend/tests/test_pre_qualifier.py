@@ -23,7 +23,6 @@ def _base_context(messages: list[dict]) -> dict:
             "industry": "SaaS",
             "target_customer": "SMB founders",
             "core_offer": "AI follow-up drafts",
-            "preferred_tone": "balanced",
         },
     }
 
@@ -58,7 +57,7 @@ def _quote_ghost_context() -> dict:
     )
 
 
-def _fake_call_claude(system_prompt: str, user_prompt: str) -> str:
+def _fake_call_openrouter(system_prompt: str, user_prompt: str) -> str:
     if "reconnect next month" in user_prompt.lower():
         return '{"should_follow_up": false, "reason": "Lead asked to reconnect next month."}'
     return '{"should_follow_up": true, "reason": "Quote sent and lead went quiet."}'
@@ -67,8 +66,8 @@ def _fake_call_claude(system_prompt: str, user_prompt: str) -> str:
 def test_pre_qualifier_should_follow_up() -> None:
     import pipeline.pre_qualifier as pre_qualifier
 
-    original_call = pre_qualifier._call_claude
-    pre_qualifier._call_claude = _fake_call_claude
+    original_call = pre_qualifier._call_openrouter
+    pre_qualifier._call_openrouter = _fake_call_openrouter
     try:
         next_month_result = should_follow_up(_next_month_context())
         quote_ghost_result = should_follow_up(_quote_ghost_context())
@@ -79,7 +78,7 @@ def test_pre_qualifier_should_follow_up() -> None:
         assert next_month_result["should_follow_up"] is False
         assert quote_ghost_result["should_follow_up"] is True
     finally:
-        pre_qualifier._call_claude = original_call
+        pre_qualifier._call_openrouter = original_call
 
 
 if __name__ == "__main__":

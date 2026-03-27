@@ -27,6 +27,7 @@ function isSupabaseTlsError(error: unknown): boolean {
 }
 
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -73,19 +74,23 @@ export async function proxy(request: NextRequest) {
   }
 
   const isProtected =
-    request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/onboarding") ||
-    request.nextUrl.pathname.startsWith("/settings");
+    pathname === "/agents" ||
+    pathname.startsWith("/agents/") ||
+    pathname === "/subscriptions" ||
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/settings");
 
   if (isProtected && !user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/sign-in";
+    redirectUrl.searchParams.set("next", "/agents");
     return NextResponse.redirect(redirectUrl);
   }
 
-  if ((request.nextUrl.pathname === "/sign-in" || request.nextUrl.pathname === "/sign-up") && user) {
+  if ((pathname === "/sign-in" || pathname === "/sign-up") && user) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
+    redirectUrl.pathname = "/agents";
     return NextResponse.redirect(redirectUrl);
   }
 
@@ -93,5 +98,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/onboarding/:path*", "/settings/:path*", "/sign-in", "/sign-up"],
+  matcher: ["/agents", "/agents/:path*", "/subscriptions", "/dashboard/:path*", "/onboarding/:path*", "/settings/:path*", "/sign-in", "/sign-up"],
 };

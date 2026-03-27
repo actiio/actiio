@@ -13,7 +13,7 @@ export function SignOutButton({ className, variant = "outline", ...props }: Sign
 
   async function signOut() {
     await supabase.auth.signOut();
-    router.push("/sign-in");
+    router.push("/");
     router.refresh();
   }
 

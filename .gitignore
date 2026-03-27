@@ -11,6 +11,16 @@ node_modules/
 # Env
 .env
 .env.local
+.env.*.local
+backend/.env
+frontend/.env.local
 
 # OS
 .DS_Store
+
+# Local logs
+backend/worker.log
+
+# Keys / certs
+*.pem
+*.key

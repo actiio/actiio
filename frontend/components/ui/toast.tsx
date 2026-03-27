@@ -1,10 +1,10 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type ToastItem = {
-  id: number;
+  id: string;
   message: string;
   type?: "success" | "error" | "default";
 };
@@ -17,11 +17,13 @@ const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
+  const nextIdRef = useRef(0);
 
   const value = useMemo(
     () => ({
       pushToast: (message: string, type: "success" | "error" | "default" = "success") => {
-        const id = Date.now();
+        nextIdRef.current += 1;
+        const id = `toast-${Date.now()}-${nextIdRef.current}`;
         setItems((prev) => [...prev, { id, message, type }]);
         setTimeout(() => {
           setItems((prev) => prev.filter((item) => item.id !== id));

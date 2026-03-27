@@ -28,7 +28,7 @@
     @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-200 rounded-full hover:bg-gray-300 transition-colors;
+    @apply bg-brand-primary/10 rounded-full hover:bg-brand-primary/20 transition-colors;
   }
 }
 
@@ -37,7 +37,23 @@
   @apply bg-white/70 backdrop-blur-md border border-white/20;
 }
 
-/* Actiio Gradient Effects */
+.glass-dark {
+  @apply bg-black/40 backdrop-blur-xl border border-white/5;
+}
+
+/* Actiio Gradient & Glow Effects */
 .bg-brand-glow {
   background: radial-gradient(circle at 50% 50%, rgba(0, 191, 99, 0.05), transparent 70%);
+}
+
+.glow-primary {
+  box-shadow: 0 0 40px -10px rgba(0, 191, 99, 0.3);
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-br from-white via-white/90 to-white/40;
+}
+
+.text-gradient-brand {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-primary to-emerald-400;
 }

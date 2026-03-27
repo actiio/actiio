@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { hasUnsafeControlChars, safeRelativePath, sanitizeEmail } from "@/lib/sanitize";
 import { supabase } from "@/lib/supabase";
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
@@ -17,15 +18,35 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 
   const isSignIn = mode === "sign-in";
 
+  useEffect(() => {
+    // This perfectly handles the edge-case where the user clicks the email link 
+    // and logs in via a new tab. This original tab will instantly auto-redirect!
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        const nextPath = safeRelativePath(new URLSearchParams(window.location.search).get("next"));
+        router.push(nextPath);
+        router.refresh();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    const safeEmail = sanitizeEmail(email);
+    if (hasUnsafeControlChars(password)) {
+      setError("Password contains unsupported control characters.");
+      setLoading(false);
+      return;
+    }
 
     const { error: authError } = isSignIn
-      ? await supabase.auth.signInWithPassword({ email, password })
+      ? await supabase.auth.signInWithPassword({ email: safeEmail, password })
       : await supabase.auth.signUp({
-        email,
+        email: safeEmail,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
@@ -44,7 +65,8 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       return;
     }
 
-    router.push("/dashboard");
+    const nextPath = safeRelativePath(new URLSearchParams(window.location.search).get("next"));
+    router.push(nextPath);
     router.refresh();
   }
 
@@ -76,11 +98,6 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-sm font-semibold text-brand-heading">Password</label>
-            {isSignIn && (
-              <Link href="#" className="text-xs font-medium text-brand-primary hover:underline">
-                Forgot password?
-              </Link>
-            )}
           </div>
           <Input
             type="password"
@@ -91,6 +108,16 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
             onChange={(e) => setPassword(e.target.value)}
             disabled={loading}
           />
+          {isSignIn && (
+            <div className="flex justify-end">
+              <Link 
+                href="/forgot-password"
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Forgot password?
+              </Link>
+            </div>
+          )}
         </div>
 
         {error && (

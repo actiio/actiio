@@ -1,4 +1,4 @@
-# Local Setup (Phase 1-5)
+# Local Setup (Phase 1-4)
 
 ## 1. Supabase
 
@@ -12,6 +12,7 @@
 1. `cd backend`
 2. `python -m venv .venv && source .venv/bin/activate`
 3. `pip install -r requirements.txt`
+   This installs `email-validator`, which Pydantic needs for the auth/email schemas.
 4. `cp .env.example .env` and fill:
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_KEY`
@@ -20,8 +21,6 @@
    - `GOOGLE_CLIENT_SECRET`
    - `GOOGLE_REDIRECT_URI`
    - `GOOGLE_PUBSUB_TOPIC`
-   - `WHATSAPP_VERIFY_TOKEN`
-   - `WHATSAPP_API_VERSION`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
    - `STRIPE_PRICE_ID`
@@ -35,9 +34,6 @@
    `python tests/test_pipeline.py`
 9. Run Gmail test script:
    `GMAIL_TEST_USER_ID=<supabase_user_id> python tests/test_gmail.py`
-10. Run WhatsApp parser test script:
-   `python tests/test_whatsapp.py`
-
 ## 3. Frontend
 
 1. `cd frontend`
@@ -82,20 +78,7 @@
    - `GOOGLE_REDIRECT_URI=`
    - `GOOGLE_PUBSUB_TOPIC=`
 
-## 7. Meta Setup (Phase 5 WhatsApp)
-
-1. Create a Meta developer app with WhatsApp Cloud API enabled.
-2. Add a WhatsApp Business phone number and copy `Phone Number ID`.
-3. Generate a permanent access token with WhatsApp messaging permissions.
-4. Set webhook callback URL to `https://yourdomain.com/api/whatsapp/webhook`.
-5. Set verify token in Meta to match `WHATSAPP_VERIFY_TOKEN` in backend `.env`.
-6. Subscribe webhook fields for messages.
-7. In onboarding/settings, save:
-   - `phone_number_id`
-   - `access_token`
-   - optional `business_account_id` and display phone number
-
-## 8. Railway Deployment
+## 7. Railway Deployment
 
 Use two services from the same backend repo:
 
@@ -108,10 +91,20 @@ Use two services from the same backend repo:
 
 `backend/Procfile` is included with both process definitions.
 
-## 9. Vercel Deployment
+## 8. Vercel Deployment
 
 1. Deploy the `frontend/` directory to Vercel.
 2. Set environment variables in Vercel:
    - `NEXT_PUBLIC_API_BASE_URL=https://your-railway-web-service-url`
    - `NEXT_PUBLIC_SUPABASE_URL=...`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY=...`
+
+## 9. Supabase Auth Configuration
+
+1. Password reset email template can be customized in:
+   **Supabase Dashboard → Authentication → Email Templates → Reset Password**
+   The default template works out of the box, but for production, customize it with Actiio branding.
+
+2. In **Supabase Dashboard → Authentication → URL Configuration**, add your URLs to allowed redirect URLs:
+   - Development: `http://localhost:3000/reset-password`
+   - Production: `https://actiio.co/reset-password`

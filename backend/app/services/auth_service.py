@@ -1,8 +1,11 @@
+import logging
+
 from fastapi import HTTPException, status
 
 from app.core.supabase import get_supabase
 
 supabase = get_supabase()
+logger = logging.getLogger(__name__)
 
 
 def sign_up(email: str, password: str) -> dict:
@@ -38,6 +41,7 @@ def get_user_from_token(token: str):
     try:
         user_response = supabase.auth.get_user(token)
     except Exception as exc:
+        logger.warning("Auth token validation failed: %s", exc)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token") from exc
 
     if user_response.user is None:

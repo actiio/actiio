@@ -1,4 +1,4 @@
-# Actiio (Phase 1 + Phase 2 + Phase 3 + Phase 4 + WhatsApp)
+# Actiio (Phase 1 + Phase 2 + Phase 3 + Phase 4)
 
 Actiio is an AI-powered lead follow-up agent. This repository contains a monorepo with:
 - `backend/` FastAPI API + worker entrypoint
@@ -24,8 +24,6 @@ Actiio is an AI-powered lead follow-up agent. This repository contains a monorep
 - Gmail test script (`backend/tests/test_gmail.py`)
 - Frontend onboarding flow (`/onboarding`) and dashboard draft approval modal
 - Settings page (`/settings`) with business profile + Gmail connection status
-- WhatsApp Cloud API connect/webhook/send endpoints
-- WhatsApp onboarding + settings connection management
 - Stripe checkout + webhook + billing portal routes
 - Subscription gating for threads/sync/send operations
 

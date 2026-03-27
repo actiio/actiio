@@ -12,6 +12,7 @@ const badgeVariants = cva(
         pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
         "needs-review": "bg-orange-50 text-orange-700 border-orange-200",
         closed: "bg-gray-50 text-gray-500 border-gray-200",
+        secondary: "bg-gray-100 text-gray-900",
       },
     },
     defaultVariants: {

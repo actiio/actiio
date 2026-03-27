@@ -12,7 +12,6 @@
 │   │   │   ├── routes_health.py
 │   │   │   ├── routes_stripe.py
 │   │   │   ├── routes_threads.py
-│   │   │   ├── routes_whatsapp.py
 │   │   │   └── router.py
 │   │   ├── core/config.py
 │   │   ├── core/supabase.py
@@ -24,11 +23,6 @@
 │   │   ├── sender.py
 │   │   ├── sync.py
 │   │   └── webhook.py
-│   ├── integrations/whatsapp/
-│   │   ├── auth.py
-│   │   ├── parser.py
-│   │   ├── sender.py
-│   │   └── webhook.py
 │   ├── pipeline/
 │   │   ├── silence_detector.py
 │   │   ├── thread_loader.py
@@ -39,7 +33,7 @@
 │   ├── tests/
 │   │   ├── test_pipeline.py
 │   │   ├── test_gmail.py
-│   │   └── test_whatsapp.py
+│   │   └── test_classifier_business_context.py
 │   ├── .env.example
 │   ├── Procfile
 │   ├── main.py

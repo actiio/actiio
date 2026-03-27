@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
-
-import { createCheckoutSession } from "@/lib/api";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const features = [
-  "Gmail + WhatsApp monitoring",
+  "Gmail monitoring",
   "AI-generated follow-up drafts",
   "3 draft options per quiet lead",
   "Tone and context awareness",
@@ -15,17 +13,6 @@ const features = [
 ];
 
 export default function PricingPage() {
-  const [loading, setLoading] = useState(false);
-
-  async function onCheckout() {
-    setLoading(true);
-    try {
-      await createCheckoutSession();
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <main className="mx-auto min-h-screen max-w-3xl px-4 py-12 sm:px-6">
       <h1 className="mb-6 text-3xl font-semibold text-slate-900">Pricing</h1>
@@ -39,9 +26,9 @@ export default function PricingPage() {
               <li key={feature}>- {feature}</li>
             ))}
           </ul>
-          <Button onClick={onCheckout} disabled={loading}>
-            {loading ? "Redirecting..." : "Get Started"}
-          </Button>
+          <Link href="/sign-up">
+            <Button>Get Started</Button>
+          </Link>
         </CardContent>
       </Card>
     </main>

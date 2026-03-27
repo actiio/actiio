@@ -1,5 +1,5 @@
-import { SettingsClient } from "@/components/settings/settings-client";
+import { redirect } from "next/navigation";
 
 export default function SettingsPage() {
-  return <SettingsClient />;
+  redirect("/agents/gmail_followup/settings");
 }

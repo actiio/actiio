@@ -8,6 +8,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(BASE_DIR))
 
+from app.core.ai_client import DEFAULT_MODEL, get_ai_client
 from pipeline.classifier import classify_thread
 from pipeline.draft_generator import generate_drafts
 
@@ -67,16 +68,29 @@ def build_sample_context() -> dict:
             "core_offer": "AI follow-up drafts for silent leads",
             "price_range": "$29/month",
             "differentiator": "Context-aware drafts from real thread history",
-            "preferred_tone": "balanced",
-            "silence_threshold_hours": 48,
         },
     }
 
 
+def test_openrouter_connection() -> None:
+    client = get_ai_client()
+    response = client.chat.completions.create(
+        model=DEFAULT_MODEL,
+        messages=[
+            {"role": "user", "content": "Say hello in one word"}
+        ],
+    )
+    print("OpenRouter connection test:")
+    print(response.choices[0].message.content)
+    print("✓ OpenRouter API working")
+
+
 def main() -> None:
     provider = (os.getenv("AI_PROVIDER") or "ollama").lower()
-    if provider != "ollama" and not os.getenv("ANTHROPIC_API_KEY"):
-        raise RuntimeError("ANTHROPIC_API_KEY is required when AI_PROVIDER is not ollama")
+    if provider != "ollama" and not os.getenv("OPENROUTER_API_KEY"):
+        raise RuntimeError("OPENROUTER_API_KEY is required when AI_PROVIDER is openrouter")
+    if provider != "ollama":
+        test_openrouter_connection()
 
     context = build_sample_context()
     classification = classify_thread(context)

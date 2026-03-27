@@ -3,11 +3,12 @@ from __future__ import annotations
 from app.core.supabase import get_supabase
 
 
-def save_drafts_and_notify(supabase_client, thread_id: str, drafts: dict) -> str:
+def save_drafts_and_notify(supabase_client, thread_id: str, drafts: dict, agent_id: str = "gmail_followup") -> dict:
     if supabase_client is None:
         supabase_client = get_supabase()
     draft_payload = {
         "thread_id": thread_id,
+        "agent_id": agent_id,
         "draft_1": drafts["draft_1"],
         "draft_2": drafts["draft_2"],
         "draft_3": drafts["draft_3"],
@@ -18,7 +19,7 @@ def save_drafts_and_notify(supabase_client, thread_id: str, drafts: dict) -> str
     if not insert_response.data:
         raise RuntimeError(f"Failed to create draft record for thread {thread_id}")
 
-    draft_record_id = insert_response.data[0]["id"]
+    draft_record = insert_response.data[0]
 
     # Fetch current follow_up_count and increment it.
     thread_resp = supabase_client.table("lead_threads").select("follow_up_count").eq("id", thread_id).limit(1).execute()
@@ -28,4 +29,4 @@ def save_drafts_and_notify(supabase_client, thread_id: str, drafts: dict) -> str
         "follow_up_count": current_count + 1,
     }).eq("id", thread_id).execute()
 
-    return draft_record_id
+    return draft_record

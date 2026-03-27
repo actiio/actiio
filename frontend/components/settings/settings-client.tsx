@@ -1,30 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname } from "next/navigation";
-
-import { apiFetch, createPortalSession } from "@/lib/api";
-import { supabase } from "@/lib/supabase";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SalesAssetsUploader } from "@/components/sales-assets-uploader";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
+import { apiFetch, createPortalSession, getBusinessProfile, saveBusinessProfile, connectGmail, submitSupportRequest, syncGmail } from "@/lib/api";
+import { getAgentMeta, isGmailAgent } from "@/lib/agents";
+import { SalesAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { SignOutButton } from "@/components/sign-out-button";
 
-type FormState = {
+interface FormState {
   business_name: string;
   industry: string;
   target_customer: string;
   core_offer: string;
   price_range: string;
   differentiator: string;
-  preferred_tone: "friendly" | "direct" | "formal";
-  silence_threshold_hours: 24 | 48 | 72;
-};
+  email_footer: string;
+}
 
 const defaults: FormState = {
   business_name: "",
@@ -33,339 +29,557 @@ const defaults: FormState = {
   core_offer: "",
   price_range: "",
   differentiator: "",
-  preferred_tone: "friendly",
-  silence_threshold_hours: 48,
+  email_footer: "",
 };
 
-export function SettingsClient() {
-  const pathname = usePathname();
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState("");
+const AUTOSAVE_DELAY_MS = 800;
+
+interface SupportFormState {
+  subject: string;
+  message: string;
+}
+
+interface SupportFormErrors {
+  subject?: string;
+  message?: string;
+}
+
+function SettingsSkeleton() {
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(0,0,0,0.05),_transparent_28%),linear-gradient(180deg,_#fcfcfc_0%,_#f4f4f5_52%,_#ededee_100%)]">
+      <main className="mx-auto max-w-4xl px-8 py-10">
+        <header className="mb-10 flex items-center justify-between animate-pulse">
+          <div>
+            <div className="h-10 w-48 rounded bg-gray-200" />
+            <div className="mt-3 h-4 w-64 rounded bg-gray-100" />
+            <div className="mt-4 h-3 w-28 rounded bg-gray-100" />
+          </div>
+          <div className="h-12 w-32 rounded-full bg-gray-200" />
+        </header>
+
+        <div className="space-y-12 animate-pulse">
+          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/90 shadow-xl shadow-black/5 backdrop-blur">
+            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.05] via-white to-black/[0.02] px-8 py-5">
+              <div className="h-3 w-28 rounded bg-gray-200" />
+            </div>
+            <div className="space-y-8 p-8">
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="h-3 w-24 rounded bg-gray-100" />
+                  <div className="h-14 rounded-2xl bg-gray-100" />
+                </div>
+                <div className="space-y-3">
+                  <div className="h-3 w-20 rounded bg-gray-100" />
+                  <div className="h-14 rounded-2xl bg-gray-100" />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="h-3 w-28 rounded bg-gray-100" />
+                <div className="h-32 rounded-2xl bg-gray-100" />
+              </div>
+              <div className="space-y-3">
+                <div className="h-3 w-24 rounded bg-gray-100" />
+                <div className="h-36 rounded-2xl bg-gray-100" />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/90 shadow-xl shadow-black/5 backdrop-blur">
+            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.04] via-white to-black/[0.02] px-8 py-5">
+              <div className="h-3 w-24 rounded bg-gray-200" />
+            </div>
+            <div className="p-8">
+              <div className="h-32 rounded-[2rem] bg-gray-100" />
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/90 shadow-xl shadow-black/5 backdrop-blur">
+            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.05] via-white to-black/[0.02] px-8 py-5">
+              <div className="h-3 w-32 rounded bg-gray-200" />
+            </div>
+            <div className="p-8">
+              <div className="flex items-center justify-between rounded-[2.5rem] border border-gray-100 bg-white p-10">
+                <div className="flex items-center gap-6">
+                  <div className="h-20 w-20 rounded-3xl bg-gray-100" />
+                  <div className="space-y-3">
+                    <div className="h-7 w-44 rounded bg-gray-200" />
+                    <div className="h-3 w-28 rounded bg-gray-100" />
+                  </div>
+                </div>
+                <div className="h-14 w-40 rounded-[1.5rem] bg-gray-200" />
+              </div>
+            </div>
+          </Card>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function canAutoSaveProfile(form: FormState): boolean {
+  return Boolean(
+    form.business_name.trim() &&
+      form.industry.trim() &&
+      form.target_customer.trim() &&
+      form.core_offer.trim()
+  );
+}
+
+export function SettingsClient({ agentId = "gmail_followup" }: { agentId?: string }) {
+  const meta = getAgentMeta(agentId);
+  const settingsHeaderTitle = isGmailAgent(agentId) ? "Settings" : meta.settingsTitle;
+  const settingsHeaderSubtitle = isGmailAgent(agentId) ? "Business profile and inbox connection" : meta.settingsSubtitle;
   const [form, setForm] = useState<FormState>(defaults);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [salesAssets, setSalesAssets] = useState<SalesAsset[]>([]);
   const [gmailConnected, setGmailConnected] = useState(false);
-  const [whatsappConnected, setWhatsappConnected] = useState(false);
-  const [waPhoneNumberId, setWaPhoneNumberId] = useState("");
-  const [waAccessToken, setWaAccessToken] = useState("");
-  const [waBusinessAccountId, setWaBusinessAccountId] = useState("");
-  const [waDisplayPhoneNumber, setWaDisplayPhoneNumber] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [supportForm, setSupportForm] = useState<SupportFormState>({ subject: "", message: "" });
+  const [supportErrors, setSupportErrors] = useState<SupportFormErrors>({});
+  const [submittingSupport, setSubmittingSupport] = useState(false);
+  const { pushToast } = useToast();
+  const hasLoadedProfileRef = useRef(false);
+  const lastSavedPayloadRef = useRef<string | null>(null);
+
+  const settingsPayload = useMemo(
+    () => ({
+      ...form,
+      sales_assets: salesAssets,
+    }),
+    [form, salesAssets]
+  );
 
   useEffect(() => {
     async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      setUserId(user.id);
-      if (user.email) setUserEmail(user.email);
-
-      const { data: profile } = await supabase
-        .from("business_profiles")
-        .select("business_name,industry,target_customer,core_offer,price_range,differentiator,preferred_tone,silence_threshold_hours")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (profile) {
-        setForm({
-          business_name: profile.business_name || "",
-          industry: profile.industry || "",
-          target_customer: profile.target_customer || "",
-          core_offer: profile.core_offer || "",
-          price_range: profile.price_range || "",
-          differentiator: profile.differentiator || "",
-          preferred_tone: (profile.preferred_tone || "friendly") as FormState["preferred_tone"],
-          silence_threshold_hours: (profile.silence_threshold_hours || 48) as FormState["silence_threshold_hours"],
-        });
+      setInitialLoading(true);
+      let me: { id: string; email?: string } | null = null;
+      try {
+        me = await apiFetch<{ id: string; email?: string }>("/api/auth/me");
+      } catch (err) {
+        me = null;
       }
+      try {
+        if (!me) {
+          return;
+        }
+        setCurrentUserId(me.id);
 
-      const { data: connection } = await supabase.from("gmail_connections").select("id").eq("user_id", user.id).maybeSingle();
-      setGmailConnected(Boolean(connection));
+        let profile: {
+          business_name?: string;
+          industry?: string;
+          target_customer?: string;
+          core_offer?: string;
+          price_range?: string;
+          differentiator?: string;
+          email_footer?: string;
+          sales_assets?: SalesAsset[];
+        } | null = null;
+        try {
+          profile = await getBusinessProfile(agentId);
+        } catch (err) {
+          profile = null;
+        }
 
-      const { data: waConnection } = await supabase
-        .from("whatsapp_connections")
-        .select("id,phone_number_id,business_account_id,display_phone_number")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (waConnection) {
-        setWhatsappConnected(true);
-        setWaPhoneNumberId(waConnection.phone_number_id || "");
-        setWaBusinessAccountId(waConnection.business_account_id || "");
-        setWaDisplayPhoneNumber(waConnection.display_phone_number || "");
+        if (profile) {
+          setForm({
+            business_name: profile.business_name || "",
+            industry: profile.industry || "",
+            target_customer: profile.target_customer || "",
+            core_offer: profile.core_offer || "",
+            price_range: profile.price_range || "",
+            differentiator: profile.differentiator || "",
+            email_footer: profile.email_footer || "",
+          });
+          setSalesAssets(Array.isArray(profile.sales_assets) ? profile.sales_assets : []);
+          lastSavedPayloadRef.current = JSON.stringify({
+            business_name: profile.business_name || "",
+            industry: profile.industry || "",
+            target_customer: profile.target_customer || "",
+            core_offer: profile.core_offer || "",
+            price_range: profile.price_range || "",
+            differentiator: profile.differentiator || "",
+            email_footer: profile.email_footer || "",
+            sales_assets: Array.isArray(profile.sales_assets) ? profile.sales_assets : [],
+          });
+        }
+
+        try {
+          if (isGmailAgent(agentId)) {
+            const gmail = await apiFetch<{ connected: boolean }>("/api/gmail/status?agent_id=" + agentId);
+            setGmailConnected(gmail.connected);
+          }
+        } catch (err) { }
+
+        hasLoadedProfileRef.current = true;
+      } finally {
+        setInitialLoading(false);
       }
     }
     void load();
-  }, []);
+  }, [agentId]);
 
-  function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
-
-  async function saveProfile() {
-    if (!userId) return;
+  async function save(showToast = true) {
     setSaving(true);
-    await supabase.from("business_profiles").upsert(
-      {
-        user_id: userId,
-        ...form,
-        price_range: form.price_range || null,
-        differentiator: form.differentiator || null,
-      },
-      { onConflict: "user_id" }
-    );
-    setSaving(false);
+    setSaveStatus("saving");
+    try {
+      await saveBusinessProfile(agentId, settingsPayload);
+      lastSavedPayloadRef.current = JSON.stringify(settingsPayload);
+      setSaveStatus("saved");
+      if (showToast) {
+        pushToast("Settings saved successfully.");
+      }
+    } catch (err) {
+      setSaveStatus("error");
+      if (showToast) {
+        pushToast("Failed to save settings.");
+      }
+    } finally {
+      setSaving(false);
+    }
   }
 
-  async function disconnectGmail() {
-    if (!userId) return;
-    await supabase.from("gmail_connections").delete().eq("user_id", userId);
+  useEffect(() => {
+    if (!hasLoadedProfileRef.current) {
+      return;
+    }
+
+    if (!canAutoSaveProfile(form)) {
+      setSaveStatus("idle");
+      return;
+    }
+
+    const payloadSnapshot = JSON.stringify(settingsPayload);
+    if (payloadSnapshot === lastSavedPayloadRef.current) {
+      return;
+    }
+
+    setSaveStatus("saving");
+    const timeoutId = window.setTimeout(() => {
+      void save(false);
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [form, settingsPayload]);
+
+  async function handleGmailConnect() {
+    try {
+      const resp = await connectGmail(agentId);
+      if (resp.auth_url) {
+        window.location.href = resp.auth_url;
+      }
+    } catch (err) {
+      pushToast("Gmail connection failed.");
+    }
+  }
+
+  async function disconnectGmailAction() {
+    await apiFetch("/api/gmail/disconnect", {
+        method: "POST",
+        body: JSON.stringify({ agent_id: agentId })
+    });
     setGmailConnected(false);
   }
 
-  async function connectGmail() {
-    const data = await apiFetch<{ auth_url: string }>("/api/gmail/auth");
-    if (data.auth_url) window.location.href = data.auth_url;
+  async function handleManageBilling() {
+    try {
+      await createPortalSession();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open billing portal.";
+      pushToast(message, "error");
+    }
   }
 
-  async function connectWhatsApp() {
-    if (!waPhoneNumberId || !waAccessToken) return;
-    await apiFetch("/api/whatsapp/connect", {
-      method: "POST",
-      body: JSON.stringify({
-        phone_number_id: waPhoneNumberId,
-        access_token: waAccessToken,
-        business_account_id: waBusinessAccountId || undefined,
-        display_phone_number: waDisplayPhoneNumber || undefined,
-      }),
-    });
-    setWhatsappConnected(true);
-    setWaAccessToken("");
+  async function handleSupportSubmit() {
+    const subject = supportForm.subject.trim();
+    const message = supportForm.message.trim();
+    const nextErrors: SupportFormErrors = {};
+    if (!subject) {
+      nextErrors.subject = "Please add a subject.";
+    }
+    if (!message) {
+      nextErrors.message = "Please describe the issue.";
+    } else if (message.length < 10) {
+      nextErrors.message = "Please add a little more detail so we can help.";
+    }
+
+    if (nextErrors.subject || nextErrors.message) {
+      setSupportErrors(nextErrors);
+      return;
+    }
+
+    setSupportErrors({});
+    setSubmittingSupport(true);
+    try {
+      await submitSupportRequest(agentId, subject, message);
+      setSupportForm({ subject: "", message: "" });
+      setSupportErrors({});
+      pushToast("Support request submitted. We will get back to you soon.");
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : "Failed to submit support request.";
+      pushToast(messageText, "error");
+    } finally {
+      setSubmittingSupport(false);
+    }
   }
 
-  async function disconnectWhatsApp() {
-    if (!userId) return;
-    await supabase.from("whatsapp_connections").delete().eq("user_id", userId);
-    setWhatsappConnected(false);
+  if (initialLoading) {
+    return <SettingsSkeleton />;
   }
-
-  const Sidebar = () => (
-    <div className="fixed left-0 top-0 hidden h-screen w-64 flex-col border-r border-gray-100 bg-white p-6 lg:flex">
-      <Link href="/" className="flex items-center gap-2 mb-10 group">
-        <Image src="/logo.png" alt="Actiio Logo" width={24} height={24} className="h-6 w-auto" />
-        <span className="text-xl font-bold tracking-tight">Actiio</span>
-      </Link>
-
-      <nav className="flex-1 space-y-1">
-        {[
-          { label: "Leads", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z", href: "/dashboard" },
-          { label: "Settings", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z", href: "/settings" }
-        ].map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 group",
-              pathname === item.href ? "bg-brand-primary/10 text-brand-primary" : "text-brand-body/60 hover:text-brand-heading hover:bg-gray-50"
-            )}
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-            </svg>
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-
-      <div className="mt-auto border-t border-gray-100 pt-6">
-        <div className="mb-4 flex items-center gap-3 px-2">
-          <div className="h-8 w-8 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary font-bold text-xs text-center uppercase">
-            {userEmail[0]}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold text-brand-heading uppercase">{userEmail.split('@')[0]}</p>
-            <p className="truncate text-xs text-brand-body/60">{userEmail}</p>
-          </div>
-        </div>
-        <SignOutButton className="w-full justify-start gap-3 px-4 text-brand-body/60 hover:text-red-600 hover:bg-red-50" />
-      </div>
-    </div>
-  );
 
   return (
-    <div className="min-h-screen bg-gray-50 lg:pl-64">
-      <Sidebar />
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(0,0,0,0.05),_transparent_28%),linear-gradient(180deg,_#fcfcfc_0%,_#f4f4f5_52%,_#ededee_100%)]">
       <main className="mx-auto max-w-4xl px-8 py-10">
-        <header className="mb-10">
-          <h1 className="text-3xl font-bold tracking-tight text-brand-heading">Settings</h1>
-          <p className="mt-1 text-sm font-medium text-brand-body/60 italic">Manage your profile and connections</p>
+        <header className="mb-10 flex items-center justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-brand-heading shadow-sm shadow-black/5 backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-black" />
+              Workspace Setup
+            </div>
+            <h1 className="text-[clamp(1.8rem,3vw,2.35rem)] font-black tracking-tight text-brand-heading">{settingsHeaderTitle}</h1>
+            <p className="mt-1 text-sm text-brand-heading/80">{settingsHeaderSubtitle}</p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-brand-heading/70">
+              {saveStatus === "saving" ? "Saving changes..." : saveStatus === "saved" ? "All changes saved" : saveStatus === "error" ? "Auto-save failed" : "Auto-save on"}
+            </p>
+          </div>
+          <Button
+            onClick={() => void save(true)}
+            disabled={saving}
+            className="rounded-full px-8 font-black shadow-lg shadow-brand-primary/20"
+          >
+            {saving ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save Now"}
+          </Button>
         </header>
 
-        <div className="space-y-8">
-          {/* Business Profile Section */}
-          <section>
-            <h2 className="text-xl font-bold text-brand-heading mb-4">Business Profile</h2>
-            <Card className="border-gray-100">
-              <CardContent className="p-8 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold">Business Name</label>
-                    <Input value={form.business_name} onChange={(e) => setField("business_name", e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold">Industry</label>
-                    <Input value={form.industry} onChange={(e) => setField("industry", e.target.value)} />
-                  </div>
+        <div className="space-y-12">
+          {/* Business Context */}
+          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/92 shadow-2xl shadow-black/5 backdrop-blur">
+            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.05] via-white to-black/[0.02] px-8 py-5">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Business Context</h3>
+            </div>
+            <div className="p-8 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Business Name</label>
+                  <Input
+                    placeholder="e.g. Acme Sales Co"
+                    value={form.business_name}
+                    onChange={(e) => setForm({ ...form, business_name: e.target.value })}
+                    className="h-14 rounded-2xl border-black/10 bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-bold">Target Customer</label>
-                  <Textarea value={form.target_customer} onChange={(e) => setField("target_customer", e.target.value)} />
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Industry</label>
+                  <Input
+                    placeholder="e.g. SaaS, Real Estate"
+                    value={form.industry}
+                    onChange={(e) => setForm({ ...form, industry: e.target.value })}
+                    className="h-14 rounded-2xl border-black/10 bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                  />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold">Core Offer</label>
-                  <Textarea value={form.core_offer} onChange={(e) => setField("core_offer", e.target.value)} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold">Preferred Tone</label>
-                    <select
-                      className="flex h-12 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                      value={form.preferred_tone}
-                      onChange={(e) => setField("preferred_tone", e.target.value as any)}
-                    >
-                      <option value="friendly">Friendly</option>
-                      <option value="direct">Direct</option>
-                      <option value="formal">Formal</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold">Follow-up Window</label>
-                    <select
-                      className="flex h-12 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                      value={String(form.silence_threshold_hours)}
-                      onChange={(e) => setField("silence_threshold_hours", Number(e.target.value) as any)}
-                    >
-                      <option value="24">24 hours</option>
-                      <option value="48">48 hours</option>
-                      <option value="72">72 hours</option>
-                    </select>
-                  </div>
-                </div>
-                <Button className="w-full py-7 font-bold text-lg" onClick={saveProfile} disabled={saving}>
-                  {saving ? "Saving Changes..." : "Save Business Profile"}
-                </Button>
-              </CardContent>
-            </Card>
-          </section>
+              </div>
 
-          {/* Connected Accounts */}
-          <section>
-            <h2 className="text-xl font-bold text-brand-heading mb-4">Connected Accounts</h2>
-            <Card className="border-gray-100 overflow-hidden">
-              <div className="divide-y divide-gray-100">
-                {/* Gmail */}
-                <div className="p-8 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-red-50 flex items-center justify-center text-red-600">
-                      <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 010 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L12 9.573l8.073-6.08c1.618-1.214 3.927-.059 3.927 1.964z" /></svg>
-                    </div>
-                    <div>
-                      <p className="font-bold text-brand-heading">Gmail Inbox</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <div className={cn("h-1.5 w-1.5 rounded-full", gmailConnected ? "bg-brand-primary animate-pulse" : "bg-gray-300")} />
-                        <p className="text-xs text-brand-body/60 font-medium">
-                          {gmailConnected ? "Connected and monitoring" : "Not connected"}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Description / Your core offer</label>
+                <Textarea
+                  placeholder="What exactly are you selling? Describe the value proposition."
+                  value={form.core_offer}
+                  onChange={(e) => setForm({ ...form, core_offer: e.target.value })}
+                  className="min-h-[120px] rounded-2xl border-black/10 bg-white p-5 shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Email Footer</label>
+                <Textarea
+                  placeholder={"Best,\nJane Doe\nAcme Sales Co\n+91 98765 43210"}
+                  value={form.email_footer}
+                  onChange={(e) => setForm({ ...form, email_footer: e.target.value })}
+                  className="min-h-[140px] rounded-2xl border-black/10 bg-white p-5 shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                />
+                <p className="px-1 text-xs text-brand-heading/70">
+                  This footer will be added to sent emails so your signature stays consistent.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Target Customer</label>
+                  <Input
+                    placeholder="e.g. Small business owners, Mid-market CTOs"
+                    value={form.target_customer}
+                    onChange={(e) => setForm({ ...form, target_customer: e.target.value })}
+                    className="h-14 rounded-2xl border-black/10 bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Core Differentiators</label>
+                  <Input
+                    placeholder="What makes you special?"
+                    value={form.differentiator}
+                    onChange={(e) => setForm({ ...form, differentiator: e.target.value })}
+                    className="h-14 rounded-2xl border-black/10 bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                  />
+                </div>
+              </div>
+
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/92 shadow-2xl shadow-black/5 backdrop-blur">
+            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.04] via-white to-black/[0.02] px-8 py-5">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Sales Assets</h3>
+            </div>
+            <div className="p-8">
+              <SalesAssetsUploader userId={currentUserId} assets={salesAssets} onChange={setSalesAssets} />
+            </div>
+          </Card>
+
+          {/* Integrations */}
+          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/92 shadow-2xl shadow-black/5 backdrop-blur">
+            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.05] via-white to-black/[0.02] px-8 py-5">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Active Channel Links</h3>
+            </div>
+            <div className="p-8 space-y-8">
+              {isGmailAgent(agentId) && (
+                <div className={cn(
+                  "group relative overflow-hidden rounded-[2.5rem] border p-10 transition-all",
+                  gmailConnected ? "border-green-100 bg-gradient-to-br from-white via-emerald-50/50 to-black/[0.02] shadow-xl shadow-green-500/10" : "border-black/10 bg-gradient-to-br from-white via-black/[0.02] to-black/[0.04] shadow-xl shadow-black/5"
+                )}>
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-6">
+                      <div className={cn(
+                        "flex h-20 w-20 items-center justify-center rounded-3xl text-3xl transition-all duration-700",
+                        gmailConnected ? "bg-green-50 scale-110 shadow-xl" : "border border-black/10 bg-white shadow-sm shadow-black/5"
+                      )}>
+                        📧
+                      </div>
+                      <div>
+                        <h4 className="font-black text-2xl text-brand-heading tracking-tight">Gmail Integration</h4>
+                        <p className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/70">
+                          {gmailConnected ? "Direct Sync Active" : "Channel Disconnected"}
                         </p>
                       </div>
                     </div>
-                  </div>
-                  {gmailConnected ? (
-                    <Button variant="ghost" className="text-red-500 hover:bg-red-50 hover:text-red-600 font-bold" onClick={disconnectGmail}>
-                      Disconnect
-                    </Button>
-                  ) : (
-                    <Button variant="outline" className="font-bold border-2" onClick={connectGmail}>
-                      Connect Gmail
-                    </Button>
-                  )}
-                </div>
-
-                {/* WhatsApp */}
-                <div className="p-8">
-                  <div className="flex items-start justify-between mb-8">
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-600">
-                        <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.414 0 .018 5.394 0 12.03c0 2.122.554 4.197 1.607 6.048l-1.708 6.24 6.384-1.674A11.778 11.778 0 0012.05 24h.005c6.634 0 12.032-5.396 12.035-12.032a11.761 11.761 0 00-3.482-8.496" /></svg>
+                    {gmailConnected ? (
+                      <div className="flex gap-4">
+                        <Button
+                          variant="ghost"
+                          className="rounded-xl font-bold text-brand-heading/70 transition-colors hover:text-brand-primary"
+                          onClick={() => void syncGmail(agentId).then(() => pushToast("Manual sync triggered."))}
+                        >
+                          Force Sync
+                        </Button>
+                        <Button variant="outline" className="h-12 rounded-[1.25rem] border-red-100 text-red-600 font-black px-6 hover:bg-red-50" onClick={disconnectGmailAction}>
+                          Disconnect
+                        </Button>
                       </div>
-                      <div>
-                        <p className="font-bold text-brand-heading">WhatsApp Business</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <div className={cn("h-1.5 w-1.5 rounded-full", whatsappConnected ? "bg-brand-primary animate-pulse" : "bg-gray-300")} />
-                          <p className="text-xs text-brand-body/60 font-medium">
-                            {whatsappConnected ? "Connected" : "Not configured"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    {whatsappConnected && (
-                      <Button variant="ghost" className="text-red-500 hover:bg-red-50 hover:text-red-600 font-bold" onClick={disconnectWhatsApp}>
-                        Disconnect
+                    ) : (
+                      <Button onClick={handleGmailConnect} className="h-14 rounded-[1.5rem] font-black px-10 shadow-2xl shadow-brand-primary/20 text-lg">
+                        Connect Gmail
                       </Button>
                     )}
                   </div>
-
-                  {!whatsappConnected && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input placeholder="Phone Number ID" value={waPhoneNumberId} onChange={(e) => setWaPhoneNumberId(e.target.value)} />
-                        <Input placeholder="Access Token" type="password" value={waAccessToken} onChange={(e) => setWaAccessToken(e.target.value)} />
-                      </div>
-                      <Button className="w-full font-bold border-2" variant="outline" onClick={connectWhatsApp}>
-                        Connect WhatsApp Account
-                      </Button>
-                    </div>
-                  )}
                 </div>
+              )}
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/92 shadow-2xl shadow-black/5 backdrop-blur">
+            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.05] via-white to-black/[0.02] px-8 py-5">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Subscription</h3>
+            </div>
+            <div className="flex flex-col gap-5 p-8 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xl font-black text-brand-heading">{meta.name}</p>
+                <p className="mt-1 text-sm font-medium text-brand-heading/75">
+                  Billing and access are managed separately for this agent.
+                </p>
               </div>
-            </Card>
-          </section>
-
-          {/* Billing */}
-          <section>
-            <h2 className="text-xl font-bold text-brand-heading mb-4">Billing & Plan</h2>
-            <Card className="border-gray-100">
-              <CardContent className="p-8 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-bold text-brand-heading">Pro Plan</p>
-                      <Badge variant="active" className="text-[10px] uppercase tracking-widest font-black">Active</Badge>
-                    </div>
-                    <p className="text-sm text-brand-body/60 font-medium">$29.00 per month</p>
-                  </div>
-                </div>
-                <Button variant="outline" className="font-bold border-2" onClick={() => void createPortalSession()}>
-                  Manage Subscription
-                </Button>
-              </CardContent>
-            </Card>
-          </section>
-
-          {/* Danger Zone */}
-          <section className="pt-10">
-            <div className="border-t border-gray-100 pt-10">
-              <h2 className="text-xl font-bold text-red-600 mb-2">Danger Zone</h2>
-              <p className="text-sm text-brand-body/60 mb-6 font-medium">Permanently delete your account and all associated lead history. This action cannot be undone.</p>
-              <Button variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold">
-                Delete Account
+              <Button variant="outline" className="rounded-full px-6 font-black" onClick={() => void handleManageBilling()}>
+                Manage Billing
               </Button>
             </div>
-          </section>
+          </Card>
+
+          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.95)_0%,rgba(245,245,245,0.92)_100%)] shadow-2xl shadow-black/5 backdrop-blur">
+            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.06] via-white to-black/[0.02] px-8 py-5">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Support</h3>
+            </div>
+            <div className="space-y-6 p-8">
+              <div className="rounded-[1.75rem] border border-black/10 bg-white/80 p-6 shadow-sm shadow-black/5">
+                <p className="text-xl font-black text-brand-heading">Need help or want to report an issue?</p>
+                <p className="mt-1 text-sm font-medium text-brand-heading/75">
+                  Send us the problem you are seeing, what you expected, and any relevant context. We will store this as a support ticket.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Subject</label>
+                <Input
+                  placeholder="e.g. Gmail sync is not finding new replies"
+                  value={supportForm.subject}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSupportForm((prev) => ({ ...prev, subject: value }));
+                    setSupportErrors((prev) => ({
+                      ...prev,
+                      subject: value.trim() ? undefined : prev.subject,
+                    }));
+                  }}
+                  className={cn(
+                    "h-14 rounded-2xl bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary",
+                    supportErrors.subject ? "border-red-300 focus-visible:ring-red-500" : "border-black/10"
+                  )}
+                />
+                {supportErrors.subject ? (
+                  <p className="px-1 text-xs text-red-600">{supportErrors.subject}</p>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Message</label>
+                <Textarea
+                  placeholder="Tell us what happened, what you expected, and any steps to reproduce it."
+                  value={supportForm.message}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSupportForm((prev) => ({ ...prev, message: value }));
+                    setSupportErrors((prev) => ({
+                      ...prev,
+                      message: value.trim().length >= 10 ? undefined : prev.message,
+                    }));
+                  }}
+                  minLength={10}
+                  className={cn(
+                    "min-h-[180px] rounded-2xl bg-white p-5 shadow-sm shadow-black/5 focus-visible:ring-brand-primary",
+                    supportErrors.message ? "border-red-300 focus-visible:ring-red-500" : "border-black/10"
+                  )}
+                />
+                {supportErrors.message ? (
+                  <p className="px-1 text-xs text-red-600">{supportErrors.message}</p>
+                ) : (
+                  <p className="px-1 text-xs text-brand-heading/70">
+                    {/* Please include at least a short description so we can reproduce the issue. */}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-[1.5rem] border border-black/10 bg-white/70 px-5 py-4 shadow-sm shadow-black/5">
+                <p className="text-xs text-brand-heading/75">
+                  You can also reach out to support@actiio.co
+                </p>
+                <Button
+                  onClick={() => void handleSupportSubmit()}
+                  disabled={submittingSupport}
+                  className="rounded-full px-8 font-black shadow-lg shadow-brand-primary/20"
+                >
+                  {submittingSupport ? "Submitting..." : "Submit Request"}
+                </Button>
+              </div>
+            </div>
+          </Card>
         </div>
       </main>
+
     </div>
   );
 }
