@@ -6,7 +6,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Actiio | Never lose a warm lead again",
+  title: "Actiio | Scale Intelligence",
   description: "Automated Gmail follow-ups for warm leads. Stay on top of every conversation with AI-powered draft generation.",
   metadataBase: new URL("https://actiio.ai"),
   openGraph: {
