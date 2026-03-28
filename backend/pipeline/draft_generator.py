@@ -56,8 +56,11 @@ Rules for each draft:
 - Format each draft like a real email body:
   start with a greeting on its own line,
   include a blank line between greeting and body,
-  keep body paragraphs separated by blank lines,
-  and end with a natural sign-off/signature block
+  keep body paragraphs separated by blank lines
+- Do not include any final signature, email footer, sender name, company name, or contact block in the generated draft
+- The saved email footer/signature is appended separately by the application, so your output must stop before the footer
+- Do not include any standalone closing sign-off line such as "Best,", "Thanks,", "Regards,", or similar
+- End the draft with the final body sentence or question only
 
 Persuasion guidelines:
 - Add a subtle hook in the first 1-2 lines (reference, observation, or light insight)
@@ -259,6 +262,21 @@ def _parse_draft_json(raw_text: str) -> dict[str, Any]:
     raise DraftGenerationError(f"Malformed JSON from draft generator: {raw_text}")
 
 
+_TRAILING_SIGNOFF_ONLY_RE = re.compile(
+    r"(?:\n\s*)+(?:best|thanks|thank you|regards|kind regards|warm regards|sincerely|cheers)[,!.\s]*(?:\n\s*(?:best|thanks|thank you|regards|kind regards|warm regards|sincerely|cheers)[,!.\s]*)*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_trailing_signoff_only(text: str) -> str:
+    cleaned = text.replace("\r\n", "\n").replace("\r", "\n").rstrip()
+    previous = None
+    while cleaned != previous:
+        previous = cleaned
+        cleaned = _TRAILING_SIGNOFF_ONLY_RE.sub("", cleaned).rstrip()
+    return cleaned
+
+
 def generate_drafts(context: dict[str, Any], classification: dict[str, Any] | None, desired_outcome: str) -> dict[str, Any]:
     user_prompt = _build_user_prompt(context, classification, desired_outcome)
 
@@ -297,6 +315,8 @@ def generate_drafts(context: dict[str, Any], classification: dict[str, Any] | No
     # The sender will add the correct prefix when sending
     for key in ["draft_1", "draft_2", "draft_3"]:
         d = res.get(key)
+        if d and d.get("message"):
+            d["message"] = _strip_trailing_signoff_only(d["message"])
         if d and d.get("subject"):
             d["subject"] = re.sub(r"^(re:\s*)+", "", d["subject"], flags=re.IGNORECASE).strip()
 

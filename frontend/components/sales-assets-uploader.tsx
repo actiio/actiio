@@ -100,14 +100,13 @@ export function SalesAssetsUploader({
   }
 
   return (
-    <div className="space-y-4 rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4 rounded-3xl bg-gray-50/70 px-6 py-5">
         <div>
-          <p className="text-sm font-bold text-brand-heading">Sales Assets</p>
-          <p className="text-xs text-brand-body/60">
+          <p className="text-sm font-semibold text-brand-body/75">
             Upload catalogs, brochures, pricing sheets, or case studies for future follow-ups.
           </p>
-          <p className="mt-1 text-xs text-brand-body/50">
+          <p className="mt-2 max-w-2xl text-xs text-brand-body/65">
             Tip: include keywords in file names (e.g. brochure, pricing, case-study) so AI can suggest the right asset.
           </p>
         </div>
@@ -119,23 +118,25 @@ export function SalesAssetsUploader({
             className="hidden"
             onChange={(e) => void handleUpload(e.target.files)}
           />
-          <Button type="button" variant="outline" className="font-bold" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+          <Button type="button" variant="outline" className="rounded-full px-5 font-bold" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
             {uploading ? "Uploading..." : "Upload Asset"}
           </Button>
         </div>
       </div>
 
       {assets.length === 0 ? (
-        <p className="text-xs font-medium text-brand-body/60">No assets uploaded yet.</p>
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-5 py-6">
+          <p className="text-sm font-medium text-brand-body/70">No assets uploaded yet.</p>
+        </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {assets.map((asset) => (
-            <div key={asset.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2">
+            <div key={asset.id} className="flex items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-white px-5 py-4">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-brand-heading">{asset.name}</p>
-                <p className="text-xs text-brand-body/55">{formatSize(asset.size)}</p>
+                <p className="mt-1 text-xs text-brand-body/65">{formatSize(asset.size)}</p>
               </div>
-              <Button type="button" variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => void handleRemove(asset.id)}>
+              <Button type="button" variant="ghost" className="rounded-full text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => void handleRemove(asset.id)}>
                 Remove
               </Button>
             </div>

@@ -105,22 +105,54 @@ def _last_synced_for_agent(user_id: str, agent_id: str) -> str | None:
     return row.get("last_synced_at") or row.get("created_at")
 
 
+def _parse_thread_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _is_waiting_on_you(thread: dict) -> bool:
+    status = thread.get("status")
+    if status in {"pending_approval", "needs_review"}:
+        return True
+    if status != "active":
+        return False
+
+    last_inbound = _parse_thread_timestamp(thread.get("last_inbound_at"))
+    last_outbound = _parse_thread_timestamp(thread.get("last_outbound_at"))
+
+    if last_inbound and (last_outbound is None or last_inbound >= last_outbound):
+        return True
+
+    return False
+
+
+def _is_waiting_on_lead(thread: dict) -> bool:
+    return thread.get("status") == "active" and not _is_waiting_on_you(thread)
+
+
 def _thread_counts_for_agent(user_id: str, agent_id: str) -> dict[str, int | str | None]:
     # Fetch all threads for this user and agent in ONE query instead of multiple count calls
     resp = (
         supabase.table("lead_threads")
-        .select("id,status")
+        .select("id,status,last_inbound_at,last_outbound_at")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
         .execute()
     )
     threads = resp.data or []
     visible_threads = [thread for thread in threads if thread.get("status") != "ignored"]
-    
-    pending_count = sum(1 for t in visible_threads if t.get("status") == "pending_approval")
-    active_count = sum(1 for t in visible_threads if t.get("status") == "active")
+
+    pending_count = sum(1 for t in visible_threads if _is_waiting_on_you(t))
+    active_count = sum(1 for t in visible_threads if _is_waiting_on_lead(t))
     total_count = len(visible_threads)
-    
+
     last_synced = _last_synced_for_agent(user_id, agent_id)
 
     return {
@@ -223,7 +255,7 @@ def get_agents_summary(current_user=Depends(get_current_user)):
     # 1. Fetch all threads for THE USER in ONE GO
     threads_resp = (
         supabase.table("lead_threads")
-        .select("id,status,agent_id")
+        .select("id,status,agent_id,last_inbound_at,last_outbound_at")
         .eq("user_id", current_user.id)
         .execute()
     )
@@ -251,10 +283,9 @@ def get_agents_summary(current_user=Depends(get_current_user)):
     ]
     
     for t in active_threads:
-        status = t.get("status")
-        if status == "pending_approval":
+        if _is_waiting_on_you(t):
             total_needs_attention += 1
-        elif status == "active":
+        elif _is_waiting_on_lead(t):
             total_active_leads += 1
         total_leads += 1
 

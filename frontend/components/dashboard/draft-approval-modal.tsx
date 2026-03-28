@@ -45,6 +45,7 @@ export function DraftApprovalModal({
   const [gmailSenderEmail, setGmailSenderEmail] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [salesAssets, setSalesAssets] = useState<SalesAsset[]>([]);
+  const [emailFooter, setEmailFooter] = useState("");
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [customAttachments, setCustomAttachments] = useState<File[]>([]);
   const textareaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
@@ -69,8 +70,10 @@ export function DraftApprovalModal({
       try {
         const profile = await getBusinessProfile(agentId);
         setSalesAssets(Array.isArray(profile?.sales_assets) ? profile.sales_assets : []);
+        setEmailFooter(typeof profile?.email_footer === "string" ? profile.email_footer.trim() : "");
       } catch (err) {
         setSalesAssets([]);
+        setEmailFooter("");
       }
 
       try {
@@ -432,6 +435,12 @@ export function DraftApprovalModal({
                     onClick={(e) => e.stopPropagation()}
                     className="min-h-[220px] resize-none overflow-hidden border-gray-100 bg-white/50 p-5 focus:bg-white focus:ring-brand-primary text-brand-heading leading-7"
                   />
+                  {emailFooter ? (
+                    <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/70 px-5 py-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-brand-body/55">Email Footer</p>
+                      <p className="mt-3 whitespace-pre-line text-sm leading-6 text-brand-body/80">{emailFooter}</p>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}

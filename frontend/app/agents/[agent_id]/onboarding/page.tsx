@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { AgentLayout } from "@/components/agents/agent-layout";
-import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
+import { SettingsClient } from "@/components/settings/settings-client";
 import { isSupportedAgentId, normalizeAgentId } from "@/lib/agents";
 
 export default async function AgentOnboardingPage({ params }: { params: Promise<{ agent_id: string }> }) {
@@ -16,7 +16,7 @@ export default async function AgentOnboardingPage({ params }: { params: Promise<
 
   return (
     <AgentLayout agentId={normalizedAgentId} activePath="settings">
-      <OnboardingFlow agentId={normalizedAgentId} />
+      <SettingsClient agentId={normalizedAgentId} mode="onboarding" />
     </AgentLayout>
   );
 }

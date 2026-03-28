@@ -146,6 +146,29 @@ function statusDotClass(thread: LeadThread) {
   return "bg-green-500";
 }
 
+function isWaitingOnYou(thread: LeadThread) {
+  if (thread.has_pending_draft || thread.status === "pending_approval" || thread.status === "needs_review") {
+    return true;
+  }
+
+  if (thread.status !== "active") {
+    return false;
+  }
+
+  const lastInboundAt = thread.last_inbound_at ? new Date(thread.last_inbound_at).getTime() : null;
+  const lastOutboundAt = thread.last_outbound_at ? new Date(thread.last_outbound_at).getTime() : null;
+
+  if (lastInboundAt && (lastOutboundAt === null || lastInboundAt >= lastOutboundAt)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isWaitingOnLead(thread: LeadThread) {
+  return thread.status === "active" && !isWaitingOnYou(thread);
+}
+
 function previewText(thread: LeadThread) {
   const content = cleanEmailContent(thread.last_message_preview || thread.last_message?.content || "").slice(0, 80);
   if (content.trim()) return content;
@@ -395,8 +418,8 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
   const stats = useMemo(() => {
     return {
       total: threads.length,
-      needsFollowUp: threads.filter((thread) => thread.status === "pending_approval" || thread.has_pending_draft || thread.status === "needs_review").length,
-      active: threads.filter((thread) => thread.status === "active").length,
+      needsFollowUp: threads.filter((thread) => isWaitingOnYou(thread)).length,
+      active: threads.filter((thread) => isWaitingOnLead(thread)).length,
     };
   }, [threads]);
 
@@ -404,10 +427,10 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
     const filtered = threads.filter((thread) => {
       if (thread.status === "ignored") return false;
       if (filterBy === "needs_follow_up") {
-        return thread.has_pending_draft || thread.status === "pending_approval" || thread.status === "needs_review";
+        return isWaitingOnYou(thread);
       }
       if (filterBy === "active") {
-        return thread.status === "active";
+        return isWaitingOnLead(thread);
       }
       return false;
     });

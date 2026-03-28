@@ -125,10 +125,25 @@ function canAutoSaveProfile(form: FormState): boolean {
   );
 }
 
-export function SettingsClient({ agentId = "gmail_followup" }: { agentId?: string }) {
+export function SettingsClient({
+  agentId = "gmail_followup",
+  mode = "settings",
+}: {
+  agentId?: string;
+  mode?: "settings" | "onboarding";
+}) {
   const meta = getAgentMeta(agentId);
-  const settingsHeaderTitle = isGmailAgent(agentId) ? "Settings" : meta.settingsTitle;
-  const settingsHeaderSubtitle = isGmailAgent(agentId) ? "Business profile and inbox connection" : meta.settingsSubtitle;
+  const isOnboarding = mode === "onboarding";
+  const settingsHeaderTitle = isOnboarding
+    ? `Set Up ${meta.shortName}`
+    : isGmailAgent(agentId)
+      ? "Settings"
+      : meta.settingsTitle;
+  const settingsHeaderSubtitle = isOnboarding
+    ? "Complete your business profile and connect Gmail to start using the workspace."
+    : isGmailAgent(agentId)
+      ? "Business profile and inbox connection"
+      : meta.settingsSubtitle;
   const [form, setForm] = useState<FormState>(defaults);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [salesAssets, setSalesAssets] = useState<SalesAsset[]>([]);
@@ -328,108 +343,148 @@ export function SettingsClient({ agentId = "gmail_followup" }: { agentId?: strin
     return <SettingsSkeleton />;
   }
 
+  const profileReady = canAutoSaveProfile(form);
+  const setupComplete = !isGmailAgent(agentId) ? profileReady : profileReady && gmailConnected;
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(0,0,0,0.05),_transparent_28%),linear-gradient(180deg,_#fcfcfc_0%,_#f4f4f5_52%,_#ededee_100%)]">
+    <div className="min-h-screen bg-gray-50">
       <main className="mx-auto max-w-4xl px-8 py-10">
         <header className="mb-10 flex items-center justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-brand-heading shadow-sm shadow-black/5 backdrop-blur">
-              <span className="h-2 w-2 rounded-full bg-black" />
-              Workspace Setup
-            </div>
+            {isOnboarding ? (
+              <div className="inline-flex items-center gap-2 rounded-full bg-brand-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-brand-primary">
+                <span className={cn("h-2 w-2 rounded-full", setupComplete ? "bg-brand-primary" : "bg-amber-500")} />
+                {setupComplete ? "Setup Complete" : "Complete Setup"}
+              </div>
+            ) : null}
             <h1 className="text-[clamp(1.8rem,3vw,2.35rem)] font-black tracking-tight text-brand-heading">{settingsHeaderTitle}</h1>
-            <p className="mt-1 text-sm text-brand-heading/80">{settingsHeaderSubtitle}</p>
-            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-brand-heading/70">
+            <p className="mt-1 text-sm text-brand-body/75">{settingsHeaderSubtitle}</p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-brand-body/60">
               {saveStatus === "saving" ? "Saving changes..." : saveStatus === "saved" ? "All changes saved" : saveStatus === "error" ? "Auto-save failed" : "Auto-save on"}
             </p>
           </div>
-          <Button
-            onClick={() => void save(true)}
-            disabled={saving}
-            className="rounded-full px-8 font-black shadow-lg shadow-brand-primary/20"
-          >
-            {saving ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save Now"}
-          </Button>
+          <div className="flex items-center gap-3">
+            {isOnboarding && setupComplete ? (
+              <Button
+                variant="outline"
+                className="rounded-full px-6 font-black"
+                onClick={() => {
+                  window.location.href = `/agents/${agentId}/dashboard`;
+                }}
+              >
+                Open Workspace
+              </Button>
+            ) : null}
+            <Button
+              onClick={() => void save(true)}
+              disabled={saving}
+              className="rounded-full px-8 font-black shadow-lg shadow-brand-primary/20"
+            >
+              {saving ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save Now"}
+            </Button>
+          </div>
         </header>
+
+        {isOnboarding ? (
+          <Card className="mb-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className="grid gap-3 md:grid-cols-3">
+              {[
+                { label: "Business profile", done: profileReady },
+                { label: "Connect Gmail", done: !isGmailAgent(agentId) || gmailConnected },
+                { label: "Go live", done: setupComplete },
+              ].map((item, index) => (
+                <div key={item.label} className="rounded-2xl bg-gray-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-brand-body/60">Step {index + 1}</p>
+                  <p className="mt-2 text-sm font-black text-brand-heading">{item.label}</p>
+                  <p className={cn("mt-2 text-xs font-semibold", item.done ? "text-brand-primary" : "text-brand-body/70")}>
+                    {item.done ? "Ready" : "Pending"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
 
         <div className="space-y-12">
           {/* Business Context */}
-          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/92 shadow-2xl shadow-black/5 backdrop-blur">
-            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.05] via-white to-black/[0.02] px-8 py-5">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Business Context</h3>
+          <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
+            <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/75">
+                {isOnboarding ? "Step 1 · Business Context" : "Business Context"}
+              </h3>
             </div>
             <div className="p-8 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Business Name</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Business Name</label>
                   <Input
                     placeholder="e.g. Acme Sales Co"
                     value={form.business_name}
                     onChange={(e) => setForm({ ...form, business_name: e.target.value })}
-                    className="h-14 rounded-2xl border-black/10 bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                    className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Industry</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Industry</label>
                   <Input
                     placeholder="e.g. SaaS, Real Estate"
                     value={form.industry}
                     onChange={(e) => setForm({ ...form, industry: e.target.value })}
-                    className="h-14 rounded-2xl border-black/10 bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                    className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Description / Your core offer</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Description / Your core offer</label>
                 <Textarea
                   placeholder="What exactly are you selling? Describe the value proposition."
                   value={form.core_offer}
                   onChange={(e) => setForm({ ...form, core_offer: e.target.value })}
-                  className="min-h-[120px] rounded-2xl border-black/10 bg-white p-5 shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                  className="rounded-2xl min-h-[120px] border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                 />
               </div>
 
+              <div className="grid grid-cols-1 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Target Customer</label>
+                  <Textarea
+                    placeholder="Describe the kinds of buyers you sell to, their company stage, roles, needs, and the situations where they usually come looking for you."
+                    value={form.target_customer}
+                    onChange={(e) => setForm({ ...form, target_customer: e.target.value })}
+                    className="min-h-[120px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Core Differentiators</label>
+                  <Textarea
+                    placeholder="Explain what makes your offering stand out. Include strengths like speed, expertise, pricing model, process, support, or outcomes clients choose you for."
+                    value={form.differentiator}
+                    onChange={(e) => setForm({ ...form, differentiator: e.target.value })}
+                    className="min-h-[120px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Email Footer</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Email Footer</label>
                 <Textarea
                   placeholder={"Best,\nJane Doe\nAcme Sales Co\n+91 98765 43210"}
                   value={form.email_footer}
                   onChange={(e) => setForm({ ...form, email_footer: e.target.value })}
-                  className="min-h-[140px] rounded-2xl border-black/10 bg-white p-5 shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
+                  className="rounded-2xl min-h-[140px] border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                 />
-                <p className="px-1 text-xs text-brand-heading/70">
+                <p className="px-1 text-xs text-brand-body/75">
                   This footer will be added to sent emails so your signature stays consistent.
                 </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Target Customer</label>
-                  <Input
-                    placeholder="e.g. Small business owners, Mid-market CTOs"
-                    value={form.target_customer}
-                    onChange={(e) => setForm({ ...form, target_customer: e.target.value })}
-                    className="h-14 rounded-2xl border-black/10 bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Core Differentiators</label>
-                  <Input
-                    placeholder="What makes you special?"
-                    value={form.differentiator}
-                    onChange={(e) => setForm({ ...form, differentiator: e.target.value })}
-                    className="h-14 rounded-2xl border-black/10 bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary"
-                  />
-                </div>
               </div>
 
             </div>
           </Card>
 
-          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/92 shadow-2xl shadow-black/5 backdrop-blur">
-            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.04] via-white to-black/[0.02] px-8 py-5">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Sales Assets</h3>
+          <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
+            <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">Sales Assets</h3>
             </div>
             <div className="p-8">
               <SalesAssetsUploader userId={currentUserId} assets={salesAssets} onChange={setSalesAssets} />
@@ -437,27 +492,29 @@ export function SettingsClient({ agentId = "gmail_followup" }: { agentId?: strin
           </Card>
 
           {/* Integrations */}
-          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/92 shadow-2xl shadow-black/5 backdrop-blur">
-            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.05] via-white to-black/[0.02] px-8 py-5">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Active Channel Links</h3>
+          <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
+            <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">
+                {isOnboarding ? "Step 2 · Active Channel Links" : "Active Channel Links"}
+              </h3>
             </div>
             <div className="p-8 space-y-8">
               {isGmailAgent(agentId) && (
                 <div className={cn(
                   "group relative overflow-hidden rounded-[2.5rem] border p-10 transition-all",
-                  gmailConnected ? "border-green-100 bg-gradient-to-br from-white via-emerald-50/50 to-black/[0.02] shadow-xl shadow-green-500/10" : "border-black/10 bg-gradient-to-br from-white via-black/[0.02] to-black/[0.04] shadow-xl shadow-black/5"
+                  gmailConnected ? "bg-white border-green-100 shadow-xl shadow-green-500/5" : "bg-gray-50/50 border-gray-100"
                 )}>
                   <div className="flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-6">
                       <div className={cn(
                         "flex h-20 w-20 items-center justify-center rounded-3xl text-3xl transition-all duration-700",
-                        gmailConnected ? "bg-green-50 scale-110 shadow-xl" : "border border-black/10 bg-white shadow-sm shadow-black/5"
+                        gmailConnected ? "bg-green-50 scale-110 shadow-xl" : "bg-white border border-gray-100"
                       )}>
                         📧
                       </div>
                       <div>
                         <h4 className="font-black text-2xl text-brand-heading tracking-tight">Gmail Integration</h4>
-                        <p className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/70">
+                        <p className="text-[10px] font-black text-brand-body/60 uppercase tracking-[0.2em] mt-2">
                           {gmailConnected ? "Direct Sync Active" : "Channel Disconnected"}
                         </p>
                       </div>
@@ -466,7 +523,7 @@ export function SettingsClient({ agentId = "gmail_followup" }: { agentId?: strin
                       <div className="flex gap-4">
                         <Button
                           variant="ghost"
-                          className="rounded-xl font-bold text-brand-heading/70 transition-colors hover:text-brand-primary"
+                          className="rounded-xl font-bold text-brand-body/70 hover:text-brand-primary transition-colors"
                           onClick={() => void syncGmail(agentId).then(() => pushToast("Manual sync triggered."))}
                         >
                           Force Sync
@@ -486,97 +543,99 @@ export function SettingsClient({ agentId = "gmail_followup" }: { agentId?: strin
             </div>
           </Card>
 
-          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-white/92 shadow-2xl shadow-black/5 backdrop-blur">
-            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.05] via-white to-black/[0.02] px-8 py-5">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Subscription</h3>
-            </div>
-            <div className="flex flex-col gap-5 p-8 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-xl font-black text-brand-heading">{meta.name}</p>
-                <p className="mt-1 text-sm font-medium text-brand-heading/75">
-                  Billing and access are managed separately for this agent.
-                </p>
+          {!isOnboarding ? (
+            <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
+              <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">Subscription</h3>
               </div>
-              <Button variant="outline" className="rounded-full px-6 font-black" onClick={() => void handleManageBilling()}>
-                Manage Billing
-              </Button>
-            </div>
-          </Card>
-
-          <Card className="overflow-hidden rounded-[2rem] border-black/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.95)_0%,rgba(245,245,245,0.92)_100%)] shadow-2xl shadow-black/5 backdrop-blur">
-            <div className="border-b border-black/10 bg-gradient-to-r from-black/[0.06] via-white to-black/[0.02] px-8 py-5">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-heading/75">Support</h3>
-            </div>
-            <div className="space-y-6 p-8">
-              <div className="rounded-[1.75rem] border border-black/10 bg-white/80 p-6 shadow-sm shadow-black/5">
-                <p className="text-xl font-black text-brand-heading">Need help or want to report an issue?</p>
-                <p className="mt-1 text-sm font-medium text-brand-heading/75">
-                  Send us the problem you are seeing, what you expected, and any relevant context. We will store this as a support ticket.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Subject</label>
-                <Input
-                  placeholder="e.g. Gmail sync is not finding new replies"
-                  value={supportForm.subject}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setSupportForm((prev) => ({ ...prev, subject: value }));
-                    setSupportErrors((prev) => ({
-                      ...prev,
-                      subject: value.trim() ? undefined : prev.subject,
-                    }));
-                  }}
-                  className={cn(
-                    "h-14 rounded-2xl bg-white shadow-sm shadow-black/5 focus-visible:ring-brand-primary",
-                    supportErrors.subject ? "border-red-300 focus-visible:ring-red-500" : "border-black/10"
-                  )}
-                />
-                {supportErrors.subject ? (
-                  <p className="px-1 text-xs text-red-600">{supportErrors.subject}</p>
-                ) : null}
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/75 px-1">Message</label>
-                <Textarea
-                  placeholder="Tell us what happened, what you expected, and any steps to reproduce it."
-                  value={supportForm.message}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setSupportForm((prev) => ({ ...prev, message: value }));
-                    setSupportErrors((prev) => ({
-                      ...prev,
-                      message: value.trim().length >= 10 ? undefined : prev.message,
-                    }));
-                  }}
-                  minLength={10}
-                  className={cn(
-                    "min-h-[180px] rounded-2xl bg-white p-5 shadow-sm shadow-black/5 focus-visible:ring-brand-primary",
-                    supportErrors.message ? "border-red-300 focus-visible:ring-red-500" : "border-black/10"
-                  )}
-                />
-                {supportErrors.message ? (
-                  <p className="px-1 text-xs text-red-600">{supportErrors.message}</p>
-                ) : (
-                  <p className="px-1 text-xs text-brand-heading/70">
-                    {/* Please include at least a short description so we can reproduce the issue. */}
+              <div className="flex flex-col gap-5 p-8 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xl font-black text-brand-heading">{meta.name}</p>
+                  <p className="mt-1 text-sm font-medium text-brand-body/75">
+                    Billing and access are managed separately for this agent.
                   </p>
-                )}
-              </div>
-              <div className="flex items-center justify-between gap-4 rounded-[1.5rem] border border-black/10 bg-white/70 px-5 py-4 shadow-sm shadow-black/5">
-                <p className="text-xs text-brand-heading/75">
-                  You can also reach out to support@actiio.co
-                </p>
-                <Button
-                  onClick={() => void handleSupportSubmit()}
-                  disabled={submittingSupport}
-                  className="rounded-full px-8 font-black shadow-lg shadow-brand-primary/20"
-                >
-                  {submittingSupport ? "Submitting..." : "Submit Request"}
+                </div>
+                <Button variant="outline" className="rounded-full px-6 font-black" onClick={() => void handleManageBilling()}>
+                  Manage Billing
                 </Button>
               </div>
-            </div>
-          </Card>
+            </Card>
+          ) : null}
+
+          {!isOnboarding ? (
+            <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
+              <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">Support</h3>
+              </div>
+              <div className="space-y-6 p-8">
+                <div>
+                  <p className="text-xl font-black text-brand-heading">Need help or want to report an issue?</p>
+                  <p className="mt-1 text-sm font-medium text-brand-body/75">
+                    Send us the problem you are seeing, what you expected, and any relevant context. We will store this as a support ticket.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/60 px-1">Subject</label>
+                  <Input
+                    placeholder="e.g. Gmail sync is not finding new replies"
+                    value={supportForm.subject}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSupportForm((prev) => ({ ...prev, subject: value }));
+                      setSupportErrors((prev) => ({
+                        ...prev,
+                        subject: value.trim() ? undefined : prev.subject,
+                      }));
+                    }}
+                    className={cn(
+                      "h-14 rounded-2xl bg-gray-50/30 focus-visible:ring-brand-primary",
+                      supportErrors.subject ? "border-red-300 focus-visible:ring-red-500" : "border-gray-100"
+                    )}
+                  />
+                  {supportErrors.subject ? (
+                    <p className="px-1 text-xs text-red-600">{supportErrors.subject}</p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/60 px-1">Message</label>
+                  <Textarea
+                    placeholder="Tell us what happened, what you expected, and any steps to reproduce it."
+                    value={supportForm.message}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSupportForm((prev) => ({ ...prev, message: value }));
+                      setSupportErrors((prev) => ({
+                        ...prev,
+                        message: value.trim().length >= 10 ? undefined : prev.message,
+                      }));
+                    }}
+                    minLength={10}
+                    className={cn(
+                      "rounded-2xl min-h-[180px] bg-gray-50/30 p-5 focus-visible:ring-brand-primary",
+                      supportErrors.message ? "border-red-300 focus-visible:ring-red-500" : "border-gray-100"
+                    )}
+                  />
+                  {supportErrors.message ? (
+                    <p className="px-1 text-xs text-red-600">{supportErrors.message}</p>
+                  ) : (
+                    <p className="px-1 text-xs text-brand-body/70"></p>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-xs text-brand-body/70">
+                    You can also reach out to support@actiio.co
+                  </p>
+                  <Button
+                    onClick={() => void handleSupportSubmit()}
+                    disabled={submittingSupport}
+                    className="rounded-full px-8 font-black shadow-lg shadow-brand-primary/20"
+                  >
+                    {submittingSupport ? "Submitting..." : "Submit Request"}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ) : null}
         </div>
       </main>
 
