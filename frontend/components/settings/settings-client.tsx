@@ -33,6 +33,14 @@ const defaults: FormState = {
 };
 
 const AUTOSAVE_DELAY_MS = 800;
+const FIELD_LIMITS = {
+  business_name: 150,
+  industry: 100,
+  core_offer: 3000,
+  target_customer: 2000,
+  differentiator: 3000,
+  email_footer: 2000,
+} as const;
 
 interface SupportFormState {
   subject: string;
@@ -42,6 +50,14 @@ interface SupportFormState {
 interface SupportFormErrors {
   subject?: string;
   message?: string;
+}
+
+function getProfileValidationMessage(form: FormState): string | null {
+  if (!form.business_name.trim()) return "Business name is required.";
+  if (!form.industry.trim()) return "Industry is required.";
+  if (!form.target_customer.trim()) return "Target customer is required.";
+  if (!form.core_offer.trim()) return "Core offer is required.";
+  return null;
 }
 
 function SettingsSkeleton() {
@@ -236,6 +252,15 @@ export function SettingsClient({
   }, [agentId]);
 
   async function save(showToast = true) {
+    const validationMessage = getProfileValidationMessage(form);
+    if (validationMessage) {
+      setSaveStatus("error");
+      if (showToast) {
+        pushToast(validationMessage, "error");
+      }
+      return;
+    }
+
     setSaving(true);
     setSaveStatus("saving");
     try {
@@ -248,7 +273,8 @@ export function SettingsClient({
     } catch (err) {
       setSaveStatus("error");
       if (showToast) {
-        pushToast("Failed to save settings.");
+        const message = err instanceof Error ? err.message : "Failed to save settings.";
+        pushToast(message, "error");
       }
     } finally {
       setSaving(false);
@@ -421,6 +447,7 @@ export function SettingsClient({
                     placeholder="e.g. Acme Sales Co"
                     value={form.business_name}
                     onChange={(e) => setForm({ ...form, business_name: e.target.value })}
+                    maxLength={FIELD_LIMITS.business_name}
                     className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                   />
                 </div>
@@ -430,6 +457,7 @@ export function SettingsClient({
                     placeholder="e.g. SaaS, Real Estate"
                     value={form.industry}
                     onChange={(e) => setForm({ ...form, industry: e.target.value })}
+                    maxLength={FIELD_LIMITS.industry}
                     className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                   />
                 </div>
@@ -441,8 +469,12 @@ export function SettingsClient({
                   placeholder="What exactly are you selling? Describe the value proposition."
                   value={form.core_offer}
                   onChange={(e) => setForm({ ...form, core_offer: e.target.value })}
+                  maxLength={FIELD_LIMITS.core_offer}
                   className="rounded-2xl min-h-[120px] border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                 />
+                <p className="px-1 text-xs text-brand-body/60">
+                  {form.core_offer.length}/{FIELD_LIMITS.core_offer}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 gap-8">
@@ -452,8 +484,12 @@ export function SettingsClient({
                     placeholder="Describe the kinds of buyers you sell to, their company stage, roles, needs, and the situations where they usually come looking for you."
                     value={form.target_customer}
                     onChange={(e) => setForm({ ...form, target_customer: e.target.value })}
+                    maxLength={FIELD_LIMITS.target_customer}
                     className="min-h-[120px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                   />
+                  <p className="px-1 text-xs text-brand-body/60">
+                    {form.target_customer.length}/{FIELD_LIMITS.target_customer}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Core Differentiators</label>
@@ -461,8 +497,12 @@ export function SettingsClient({
                     placeholder="Explain what makes your offering stand out. Include strengths like speed, expertise, pricing model, process, support, or outcomes clients choose you for."
                     value={form.differentiator}
                     onChange={(e) => setForm({ ...form, differentiator: e.target.value })}
+                    maxLength={FIELD_LIMITS.differentiator}
                     className="min-h-[120px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                   />
+                  <p className="px-1 text-xs text-brand-body/60">
+                    {form.differentiator.length}/{FIELD_LIMITS.differentiator}
+                  </p>
                 </div>
               </div>
 
@@ -472,10 +512,11 @@ export function SettingsClient({
                   placeholder={"Best,\nJane Doe\nAcme Sales Co\n+91 98765 43210"}
                   value={form.email_footer}
                   onChange={(e) => setForm({ ...form, email_footer: e.target.value })}
+                  maxLength={FIELD_LIMITS.email_footer}
                   className="rounded-2xl min-h-[140px] border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                 />
                 <p className="px-1 text-xs text-brand-body/75">
-                  This footer will be added to sent emails so your signature stays consistent.
+                  This footer will be added to sent emails so your signature stays consistent. {form.email_footer.length}/{FIELD_LIMITS.email_footer}
                 </p>
               </div>
 
