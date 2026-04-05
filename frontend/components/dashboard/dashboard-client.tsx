@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
-import { apiFetch, createCheckoutSession, getAgents, getThreads, syncGmail, ignoreThread } from "@/lib/api";
+import { apiFetch, connectGmail, createCheckoutSession, getAgents, getThreads, syncGmail, ignoreThread } from "@/lib/api";
 import { getAgentMeta, isGmailAgent } from "@/lib/agents";
 import { supabase } from "@/lib/supabase";
 import { LeadThread, ThreadDrafts } from "@/lib/types";
@@ -259,20 +259,40 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [gmailStatus, setGmailStatus] = useState<"connected" | "disconnected" | null>(null);
+  const [gmailEmail, setGmailEmail] = useState<string | null>(null);
 
   async function refreshGmailStatus() {
     if (!isGmailAgent(agentId)) {
       setLastSyncedAt(null);
+      setGmailStatus(null);
+      setGmailEmail(null);
       return;
     }
 
     try {
-      const gmailStatus = await apiFetch<{ connected: boolean; email?: string; last_synced_at?: string | null }>(
+      const gmailStatus = await apiFetch<{ connected: boolean; status?: "connected" | "disconnected" | null; email?: string; last_synced_at?: string | null }>(
         `/api/gmail/status?agent_id=${encodeURIComponent(agentId)}`
       );
       setLastSyncedAt(gmailStatus.last_synced_at || null);
+      setGmailStatus(gmailStatus.status || (gmailStatus.connected ? "connected" : null));
+      setGmailEmail(gmailStatus.email || null);
     } catch {
       setLastSyncedAt(null);
+      setGmailStatus(null);
+      setGmailEmail(null);
+    }
+  }
+
+  async function reconnectGmail() {
+    try {
+      const resp = await connectGmail(agentId);
+      if (resp.auth_url) {
+        window.location.href = resp.auth_url;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not start Gmail reconnect.";
+      pushToast(message, "error");
     }
   }
 
@@ -635,6 +655,25 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
             </div>
           )}
         </header>
+
+        {gmailStatus === "disconnected" && (
+          <div className="mb-8 rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-amber-700">Gmail attention needed</p>
+                <p className="mt-2 text-base font-semibold text-amber-950">
+                  {"⚠️ Your Gmail connection was disconnected. Reconnect to resume tracking your leads."}
+                </p>
+                {gmailEmail && (
+                  <p className="mt-1 text-sm text-amber-800">Disconnected account: {gmailEmail}</p>
+                )}
+              </div>
+              <Button className="rounded-xl bg-amber-600 px-5 font-bold text-white hover:bg-amber-700" onClick={reconnectGmail}>
+                Reconnect Gmail
+              </Button>
+            </div>
+          </div>
+        )}
 
         {loadError && (
           <div className="mb-8 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-medium text-red-600">

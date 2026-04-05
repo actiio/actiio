@@ -39,6 +39,7 @@ class GmailSyncResponse(BaseModel):
 
 class GmailStatusResponse(BaseModel):
     connected: bool
+    status: Optional[str] = None
     email: Optional[str] = None
     display_name: Optional[str] = None
     last_synced_at: Optional[str] = None
@@ -247,17 +248,19 @@ def gmail_status(agent_id: str = Query(default="gmail_followup"), current_user=D
     agent_id = validate_agent_id(agent_id)
     response = (
         supabase.table("gmail_connections")
-        .select("id,email,display_name,last_synced_at,created_at")
+        .select("id,email,display_name,last_synced_at,created_at,status")
         .eq("user_id", current_user.id)
         .eq("agent_id", agent_id)
         .limit(1)
         .execute()
     )
     if not response.data:
-        return GmailStatusResponse(connected=False, email=None, display_name=None, last_synced_at=None)
+        return GmailStatusResponse(connected=False, status=None, email=None, display_name=None, last_synced_at=None)
     row = response.data[0]
+    connection_status = row.get("status") or "connected"
     return GmailStatusResponse(
-        connected=True,
+        connected=connection_status != "disconnected",
+        status=connection_status,
         email=row.get("email"),
         display_name=row.get("display_name"),
         last_synced_at=(row.get("last_synced_at") or row.get("created_at")),

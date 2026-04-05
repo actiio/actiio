@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from typing import Dict
 
+from google.auth.exceptions import RefreshError, TransportError
 from googleapiclient.discovery import build
 
 from integrations.gmail.auth import get_credentials
 from integrations.gmail.parser import parse_thread
+
+
+class GmailDisconnectedError(Exception):
+    """Raised when Gmail access is no longer valid for the user."""
 
 
 def build_gmail_service(user_id: str, agent_id: str = "gmail_followup"):
@@ -14,12 +19,15 @@ def build_gmail_service(user_id: str, agent_id: str = "gmail_followup"):
 
 
 def fetch_parsed_thread(user_id: str, agent_id: str, gmail_thread_id: str) -> Dict[str, object]:
-    service = build_gmail_service(user_id=user_id, agent_id=agent_id)
-    profile = service.users().getProfile(userId="me").execute()
-    owner_email = profile.get("emailAddress")
-    raw_thread = service.users().threads().get(
-        userId="me",
-        id=gmail_thread_id,
-        format="full",
-    ).execute()
-    return parse_thread(raw_thread, owner_email=owner_email)
+    try:
+        service = build_gmail_service(user_id=user_id, agent_id=agent_id)
+        profile = service.users().getProfile(userId="me").execute()
+        owner_email = profile.get("emailAddress")
+        raw_thread = service.users().threads().get(
+            userId="me",
+            id=gmail_thread_id,
+            format="full",
+        ).execute()
+        return parse_thread(raw_thread, owner_email=owner_email)
+    except (RefreshError, TransportError) as exc:
+        raise GmailDisconnectedError("Gmail connection was disconnected. Please reconnect your Gmail account.") from exc

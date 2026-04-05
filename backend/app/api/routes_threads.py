@@ -12,7 +12,7 @@ from app.core.limiter import limiter, user_or_ip_key_func
 from app.middleware.subscription import require_active_subscription
 from app.core.supabase import get_supabase
 from app.core.utils import parse_supabase_timestamp
-from integrations.gmail.client import fetch_parsed_thread
+from integrations.gmail.client import GmailDisconnectedError, fetch_parsed_thread
 from pipeline.draft_generator import generate_drafts
 from pipeline.notifier import save_drafts_and_notify
 from pipeline.thread_loader import load_thread_context
@@ -327,6 +327,8 @@ async def get_thread_recent_messages(thread_id: str, agent_id: str = "gmail_foll
             if gmail_thread_id
             else []
         )
+    except GmailDisconnectedError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception:
         logger.exception("Failed to fetch live Gmail messages for thread %s", thread_id_str)
         recent_messages = _stored_recent_messages(thread_id_str, limit=2)
@@ -384,6 +386,9 @@ async def generate_follow_up_for_thread(
                 "Thread content truncated for thread %s — exceeded maximum length (%d chars)",
                 thread_id_str, len(context_json),
             )
+    except GmailDisconnectedError as exc:
+        logger.warning("Gmail disconnected while loading thread context for thread %s: %s", thread_id_str, exc)
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Context loading failed for thread %s: %s", thread_id_str, exc)
         (

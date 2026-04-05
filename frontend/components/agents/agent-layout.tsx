@@ -33,7 +33,7 @@ export function AgentLayout({
     async function load() {
       if (isGmailAgent(agentId)) {
         try {
-          const gmail = await apiFetch<{ connected: boolean; email?: string }>(
+          const gmail = await apiFetch<{ connected: boolean; status?: string; email?: string }>(
             `/api/gmail/status?agent_id=${encodeURIComponent(agentId)}`
           );
           setGmailConnected(Boolean(gmail.connected));
