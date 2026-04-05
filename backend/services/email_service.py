@@ -16,6 +16,12 @@ def _get_reconnect_url() -> str:
     return f"{base_url}/settings"
 
 
+def _get_logo_url() -> str:
+    settings = get_settings()
+    base_url = (settings.frontend_url or "http://localhost:3000").rstrip("/")
+    return f"{base_url}/logo.png"
+
+
 def send_gmail_disconnection_alert(user_email: Optional[str], gmail_email: Optional[str]) -> None:
     settings = get_settings()
     gmail_label = (gmail_email or "your Gmail account").strip()
@@ -29,12 +35,16 @@ def send_gmail_disconnection_alert(user_email: Optional[str], gmail_email: Optio
         return
 
     reconnect_url = _get_reconnect_url()
+    logo_url = _get_logo_url()
     resend.api_key = settings.resend_api_key
 
     html = f"""
     <div style="margin:0;padding:32px 16px;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111111;">
       <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:48px;box-sizing:border-box;">
-        <div style="font-size:24px;font-weight:700;letter-spacing:-0.02em;margin:0 0 24px;">Actiio</div>
+        <div style="display:flex;align-items:center;gap:12px;font-size:24px;font-weight:700;letter-spacing:-0.02em;margin:0 0 24px;">
+          <img src="{logo_url}" alt="Actiio logo" width="32" height="32" style="display:block;width:32px;height:32px;border-radius:8px;" />
+          <span>Actiio</span>
+        </div>
         <h1 style="font-size:28px;line-height:1.2;margin:0 0 16px;">Your Gmail connection was disconnected</h1>
         <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 28px;">
           Your Gmail account {gmail_label} has been disconnected from Actiio. Your leads are no longer being tracked.
