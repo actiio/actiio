@@ -22,6 +22,7 @@ class _FakeExecute:
 class _FakeDeleteQuery:
     def __init__(self, supabase):
         self.supabase = supabase
+        self.table_name: str | None = None
         self.filters: dict[str, str] = {}
 
     def eq(self, key, value):
@@ -29,7 +30,26 @@ class _FakeDeleteQuery:
         return self
 
     def execute(self):
-        self.supabase.deleted_filters = dict(self.filters)
+        self.supabase.deleted_filters[self.table_name or "unknown"] = dict(self.filters)
+        return type("Result", (), {"data": []})()
+
+
+class _FakeUpdateQuery:
+    def __init__(self, supabase, payload):
+        self.supabase = supabase
+        self.payload = payload
+        self.table_name: str | None = None
+        self.filters: dict[str, str] = {}
+
+    def eq(self, key, value):
+        self.filters[key] = value
+        return self
+
+    def execute(self):
+        self.supabase.updated_rows[self.table_name or "unknown"] = {
+            "payload": dict(self.payload),
+            "filters": dict(self.filters),
+        }
         return type("Result", (), {"data": []})()
 
 
@@ -51,34 +71,41 @@ class _FakeSelectQuery:
 
 
 class _FakeSupabase:
-    def __init__(self, row):
-        self.row = row
-        self.deleted_filters: dict[str, str] | None = None
+    def __init__(self, rows_by_table):
+        self.rows_by_table = rows_by_table
+        self.updated_rows: dict[str, dict[str, dict[str, str]]] = {}
+        self.upserted_rows: dict[str, dict[str, str | None]] = {}
+        self.current_table: str | None = None
 
     def table(self, name):
-        if name != "gmail_connections":
-            raise AssertionError(f"Unexpected table: {name}")
+        self.current_table = name
         return self
 
     def select(self, *_args, **_kwargs):
-        return _FakeSelectQuery(self.row)
+        return _FakeSelectQuery(self.rows_by_table.get(self.current_table))
 
-    def delete(self):
-        return _FakeDeleteQuery(self)
+    def update(self, payload):
+        query = _FakeUpdateQuery(self, payload)
+        query.table_name = self.current_table
+        return query
+
+    def upsert(self, payload, **_kwargs):
+        self.upserted_rows[self.current_table or "unknown"] = dict(payload)
+        return _FakeExecute([payload])
 
 
-def test_get_credentials_clears_revoked_connection() -> None:
+def test_get_credentials_marks_revoked_connection_disconnected() -> None:
     original_supabase = auth.supabase
     original_refresh = auth.Credentials.refresh
 
     fake_supabase = _FakeSupabase(
-        {
+        {"gmail_connections": {
             "user_id": "user-123",
             "agent_id": "gmail_followup",
             "access_token": "old-access-token",
             "refresh_token": "old-refresh-token",
             "token_expiry": "2025-01-01T00:00:00+00:00",
-        }
+        }}
     )
 
     def _fake_refresh(self, _request):
@@ -97,9 +124,12 @@ def test_get_credentials_clears_revoked_connection() -> None:
         except auth.GmailConnectionExpiredError:
             pass
 
-        assert fake_supabase.deleted_filters == {
-            "user_id": "user-123",
-            "agent_id": "gmail_followup",
+        assert fake_supabase.updated_rows["gmail_connections"] == {
+            "payload": {"status": "disconnected"},
+            "filters": {
+                "user_id": "user-123",
+                "agent_id": "gmail_followup",
+            },
         }
     finally:
         auth.supabase = original_supabase

@@ -104,6 +104,7 @@ create table if not exists public.lead_threads (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users (id) on delete cascade,
   agent_id text references public.agents(id) default 'gmail_followup',
+  gmail_account_email text,
   contact_name text,
   contact_email text,
   contact_phone text,
@@ -179,13 +180,14 @@ create table if not exists public.thread_audits (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users (id) on delete cascade,
   agent_id text references public.agents(id) default 'gmail_followup',
+  gmail_account_email text,
   gmail_thread_id text not null,
   classification_status text not null check (classification_status in ('lead', 'not_lead')),
   last_message_at timestamptz,
   last_gmail_message_id text,
   last_checked_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
-  unique (user_id, agent_id, gmail_thread_id)
+  unique (user_id, agent_id, gmail_account_email, gmail_thread_id)
 );
 
 create table if not exists public.drafts (

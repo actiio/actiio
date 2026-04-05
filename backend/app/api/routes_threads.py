@@ -22,6 +22,25 @@ supabase = get_supabase()
 router = APIRouter(tags=["threads"])
 logger = logging.getLogger(__name__)
 
+
+def _get_current_gmail_account_email(user_id: str, agent_id: str) -> str | None:
+    response = (
+        supabase.table("gmail_connections")
+        .select("email,status")
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        return None
+    row = response.data[0]
+    if row.get("status") == "disconnected":
+        return None
+    email = (row.get("email") or "").strip().lower()
+    return email or None
+
+
 def _stored_recent_messages(thread_id: str, limit: int = 2) -> list[dict[str, Any]]:
     message_response = (
         supabase.table("messages")
@@ -70,14 +89,19 @@ class ThreadUpdateRequest(BaseModel):
 
 
 def _fetch_threads_response(user_id: str, agent_id: str):
+    gmail_account_email = _get_current_gmail_account_email(user_id, agent_id)
+    if not gmail_account_email:
+        return type("Result", (), {"data": []})()
+
     try:
         return (
             supabase.table("lead_threads")
             .select(
-                "id,user_id,agent_id,contact_name,contact_email,contact_phone,subject,channel,status,close_reason,last_inbound_at,last_outbound_at,follow_up_count,created_at,gmail_thread_id"
+                "id,user_id,agent_id,gmail_account_email,contact_name,contact_email,contact_phone,subject,channel,status,close_reason,last_inbound_at,last_outbound_at,follow_up_count,created_at,gmail_thread_id"
             )
             .eq("user_id", user_id)
             .eq("agent_id", agent_id)
+            .eq("gmail_account_email", gmail_account_email)
             .in_("status", ["active", "pending_approval", "needs_review", "closed"])
             .order("last_inbound_at", desc=True)
             .execute()
@@ -86,10 +110,11 @@ def _fetch_threads_response(user_id: str, agent_id: str):
         fallback = (
             supabase.table("lead_threads")
             .select(
-                "id,user_id,agent_id,contact_name,contact_email,contact_phone,subject,channel,status,last_inbound_at,last_outbound_at,follow_up_count,created_at,gmail_thread_id"
+                "id,user_id,agent_id,gmail_account_email,contact_name,contact_email,contact_phone,subject,channel,status,last_inbound_at,last_outbound_at,follow_up_count,created_at,gmail_thread_id"
             )
             .eq("user_id", user_id)
             .eq("agent_id", agent_id)
+            .eq("gmail_account_email", gmail_account_email)
             .in_("status", ["active", "pending_approval", "needs_review", "closed"])
             .order("last_inbound_at", desc=True)
             .execute()
@@ -185,12 +210,14 @@ async def update_thread(
 ):
     agent_id = validate_agent_id(agent_id)
     thread_id_str = str(UUID(thread_id))
+    gmail_account_email = _get_current_gmail_account_email(current_user.id, agent_id)
     thread_response = (
         supabase.table("lead_threads")
         .select("id,status,close_reason,follow_up_count")
         .eq("id", thread_id_str)
         .eq("user_id", current_user.id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .limit(1)
         .execute()
     )
@@ -239,12 +266,14 @@ async def ignore_thread(
 ):
     agent_id = validate_agent_id(agent_id)
     thread_id_str = str(UUID(thread_id))
+    gmail_account_email = _get_current_gmail_account_email(current_user.id, agent_id)
     thread_response = (
         supabase.table("lead_threads")
         .select("id")
         .eq("id", thread_id_str)
         .eq("user_id", current_user.id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .limit(1)
         .execute()
     )
@@ -268,12 +297,14 @@ async def ignore_thread(
 async def get_thread_drafts(thread_id: str, agent_id: str = "gmail_followup", current_user=Depends(get_current_user), _=Depends(require_active_subscription)):
     agent_id = validate_agent_id(agent_id)
     thread_id_str = str(UUID(thread_id))
+    gmail_account_email = _get_current_gmail_account_email(current_user.id, agent_id)
     thread_response = (
         supabase.table("lead_threads")
         .select("id")
         .eq("id", thread_id_str)
         .eq("user_id", current_user.id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .limit(1)
         .execute()
     )
@@ -302,12 +333,14 @@ async def get_thread_drafts(thread_id: str, agent_id: str = "gmail_followup", cu
 async def get_thread_recent_messages(thread_id: str, agent_id: str = "gmail_followup", current_user=Depends(get_current_user), _=Depends(require_active_subscription)):
     agent_id = validate_agent_id(agent_id)
     thread_id_str = str(UUID(thread_id))
+    gmail_account_email = _get_current_gmail_account_email(current_user.id, agent_id)
     thread_response = (
         supabase.table("lead_threads")
         .select("id,subject,gmail_thread_id")
         .eq("id", thread_id_str)
         .eq("user_id", current_user.id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .limit(1)
         .execute()
     )
@@ -356,12 +389,14 @@ async def generate_follow_up_for_thread(
 ):
     agent_id = validate_agent_id(agent_id)
     thread_id_str = str(UUID(thread_id))
+    gmail_account_email = _get_current_gmail_account_email(current_user.id, agent_id)
     thread_response = (
         supabase.table("lead_threads")
         .select("id,user_id,status")
         .eq("id", thread_id_str)
         .eq("user_id", current_user.id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .limit(1)
         .execute()
     )

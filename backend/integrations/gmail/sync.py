@@ -156,12 +156,13 @@ def _build_sync_query(last_synced_at: Optional[datetime]) -> str:
     return f"after:{int(lookback.timestamp())}"
 
 
-def _get_thread_audit(user_id: str, agent_id: str, gmail_thread_id: str) -> Optional[Dict[str, Any]]:
+def _get_thread_audit(user_id: str, agent_id: str, gmail_account_email: str, gmail_thread_id: str) -> Optional[Dict[str, Any]]:
     response = (
         supabase.table("thread_audits")
         .select("classification_status,last_message_at,last_gmail_message_id,last_checked_at")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .eq("gmail_thread_id", gmail_thread_id)
         .limit(1)
         .execute()
@@ -169,19 +170,26 @@ def _get_thread_audit(user_id: str, agent_id: str, gmail_thread_id: str) -> Opti
     return response.data[0] if response.data else None
 
 
-def _upsert_thread_audit(user_id: str, agent_id: str, parsed_thread: Dict[str, Any], classification_status: str) -> None:
+def _upsert_thread_audit(
+    user_id: str,
+    agent_id: str,
+    gmail_account_email: str,
+    parsed_thread: Dict[str, Any],
+    classification_status: str,
+) -> None:
     last_message_at, last_gmail_message_id = _latest_message_info(parsed_thread.get("messages", []))
     supabase.table("thread_audits").upsert(
         {
             "user_id": user_id,
             "agent_id": agent_id,
+            "gmail_account_email": gmail_account_email,
             "gmail_thread_id": parsed_thread["gmail_thread_id"],
             "classification_status": classification_status,
             "last_message_at": last_message_at,
             "last_gmail_message_id": last_gmail_message_id,
             "last_checked_at": datetime.now(timezone.utc).isoformat(),
         },
-        on_conflict="user_id,agent_id,gmail_thread_id",
+        on_conflict="user_id,agent_id,gmail_account_email,gmail_thread_id",
     ).execute()
 
 
@@ -199,13 +207,14 @@ def _audit_matches_latest_message(audit_row: Optional[Dict[str, Any]], messages:
     return False
 
 
-def _cleanup_old_thread_audits(user_id: str, agent_id: str, retention_days: int = 90) -> None:
+def _cleanup_old_thread_audits(user_id: str, agent_id: str, gmail_account_email: str, retention_days: int = 90) -> None:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
     (
         supabase.table("thread_audits")
         .delete()
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .eq("classification_status", "not_lead")
         .lt("last_checked_at", cutoff)
         .execute()
@@ -391,12 +400,19 @@ def _has_unseen_inbound_reply(thread_id: str, messages: List[Dict[str, Any]]) ->
     return any(message_id not in existing_ids for message_id in inbound_message_ids)
 
 
-def _upsert_lead_thread(user_id: str, agent_id: str, parsed_thread: Dict[str, Any], classified_at: str) -> str:
+def _upsert_lead_thread(
+    user_id: str,
+    agent_id: str,
+    gmail_account_email: str,
+    parsed_thread: Dict[str, Any],
+    classified_at: str,
+) -> str:
     existing = (
         supabase.table("lead_threads")
         .select("id,status,last_inbound_at,last_outbound_at")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .eq("gmail_thread_id", parsed_thread["gmail_thread_id"])
         .limit(1)
         .execute()
@@ -406,6 +422,7 @@ def _upsert_lead_thread(user_id: str, agent_id: str, parsed_thread: Dict[str, An
     payload = {
         "user_id": user_id,
         "agent_id": agent_id,
+        "gmail_account_email": gmail_account_email,
         "contact_name": parsed_thread.get("contact_name"),
         "contact_email": parsed_thread.get("contact_email"),
         "subject": parsed_thread.get("subject") or "",
@@ -440,12 +457,13 @@ def _upsert_lead_thread(user_id: str, agent_id: str, parsed_thread: Dict[str, An
     return created.data[0]["id"]
 
 
-def _is_tracked_thread(user_id: str, agent_id: str, gmail_thread_id: str) -> bool:
+def _is_tracked_thread(user_id: str, agent_id: str, gmail_account_email: str, gmail_thread_id: str) -> bool:
     existing = (
         supabase.table("lead_threads")
         .select("id")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .eq("gmail_thread_id", gmail_thread_id)
         .limit(1)
         .execute()
@@ -479,11 +497,12 @@ def _store_messages(thread_id: str, messages: List[Dict[str, Any]]) -> None:
         ).execute()
 
 
-def _store_lead_thread(user_id: str, agent_id: str, parsed_thread: Dict[str, Any]) -> str:
+def _store_lead_thread(user_id: str, agent_id: str, gmail_account_email: str, parsed_thread: Dict[str, Any]) -> str:
     classified_at = datetime.now(timezone.utc).isoformat()
     thread_id = _upsert_lead_thread(
         user_id=user_id,
         agent_id=agent_id,
+        gmail_account_email=gmail_account_email,
         parsed_thread=parsed_thread,
         classified_at=classified_at,
     )
@@ -492,12 +511,18 @@ def _store_lead_thread(user_id: str, agent_id: str, parsed_thread: Dict[str, Any
     return thread_id
 
 
-def _refresh_tracked_thread(user_id: str, agent_id: str, parsed_thread: Dict[str, Any]) -> tuple[int, int]:
+def _refresh_tracked_thread(
+    user_id: str,
+    agent_id: str,
+    gmail_account_email: str,
+    parsed_thread: Dict[str, Any],
+) -> tuple[int, int]:
     existing_thread = (
         supabase.table("lead_threads")
         .select("id")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .eq("gmail_thread_id", parsed_thread["gmail_thread_id"])
         .limit(1)
         .execute()
@@ -513,8 +538,19 @@ def _refresh_tracked_thread(user_id: str, agent_id: str, parsed_thread: Dict[str
         if unseen_inbound > 0:
             replied_threads += 1
 
-    _store_lead_thread(user_id=user_id, agent_id=agent_id, parsed_thread=parsed_thread)
-    _upsert_thread_audit(user_id=user_id, agent_id=agent_id, parsed_thread=parsed_thread, classification_status="lead")
+    _store_lead_thread(
+        user_id=user_id,
+        agent_id=agent_id,
+        gmail_account_email=gmail_account_email,
+        parsed_thread=parsed_thread,
+    )
+    _upsert_thread_audit(
+        user_id=user_id,
+        agent_id=agent_id,
+        gmail_account_email=gmail_account_email,
+        parsed_thread=parsed_thread,
+        classification_status="lead",
+    )
     return updated_threads, replied_threads
 
 
@@ -551,6 +587,7 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
 
     query = _build_sync_query(last_synced_at)
     logger.info("Running Gmail sync for user %s with query: %s", user_id, query)
+    gmail_account_email = (owner_email or "").strip().lower()
 
     business_profile = _fetch_business_profile(user_id, agent_id)
     leads_found = 0
@@ -609,10 +646,16 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
             parsed_thread = parse_thread(raw_thread, owner_email=owner_email)
             gmail_thread_id = parsed_thread["gmail_thread_id"]
 
-            if _is_tracked_thread(user_id=user_id, agent_id=agent_id, gmail_thread_id=gmail_thread_id):
+            if _is_tracked_thread(
+                user_id=user_id,
+                agent_id=agent_id,
+                gmail_account_email=gmail_account_email,
+                gmail_thread_id=gmail_thread_id,
+            ):
                 updated, replied = _refresh_tracked_thread(
                     user_id=user_id,
                     agent_id=agent_id,
+                    gmail_account_email=gmail_account_email,
                     parsed_thread=parsed_thread,
                 )
                 updated_threads += updated
@@ -621,17 +664,34 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
 
             messages = parsed_thread.get("messages", [])
             first_message = messages[0] if messages else {}
-            audit_row = _get_thread_audit(user_id=user_id, agent_id=agent_id, gmail_thread_id=gmail_thread_id)
+            audit_row = _get_thread_audit(
+                user_id=user_id,
+                agent_id=agent_id,
+                gmail_account_email=gmail_account_email,
+                gmail_thread_id=gmail_thread_id,
+            )
 
             if audit_row and audit_row.get("classification_status") == "lead":
-                _store_lead_thread(user_id=user_id, agent_id=agent_id, parsed_thread=parsed_thread)
-                _upsert_thread_audit(user_id=user_id, agent_id=agent_id, parsed_thread=parsed_thread, classification_status="lead")
+                _store_lead_thread(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    gmail_account_email=gmail_account_email,
+                    parsed_thread=parsed_thread,
+                )
+                _upsert_thread_audit(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    gmail_account_email=gmail_account_email,
+                    parsed_thread=parsed_thread,
+                    classification_status="lead",
+                )
                 continue
 
             if is_system_email(first_message):
                 _upsert_thread_audit(
                     user_id=user_id,
                     agent_id=agent_id,
+                    gmail_account_email=gmail_account_email,
                     parsed_thread=parsed_thread,
                     classification_status="not_lead",
                 )
@@ -652,10 +712,16 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
             logger.info("Thread %s classification result: %s", gmail_thread_id, is_lead)
 
             if is_lead:
-                _store_lead_thread(user_id=user_id, agent_id=agent_id, parsed_thread=parsed_thread)
+                _store_lead_thread(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    gmail_account_email=gmail_account_email,
+                    parsed_thread=parsed_thread,
+                )
                 _upsert_thread_audit(
                     user_id=user_id,
                     agent_id=agent_id,
+                    gmail_account_email=gmail_account_email,
                     parsed_thread=parsed_thread,
                     classification_status="lead",
                 )
@@ -665,6 +731,7 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
             _upsert_thread_audit(
                 user_id=user_id,
                 agent_id=agent_id,
+                gmail_account_email=gmail_account_email,
                 parsed_thread=parsed_thread,
                 classification_status="not_lead",
             )
@@ -680,7 +747,7 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
         .eq("agent_id", agent_id)
         .execute()
     )
-    _cleanup_old_thread_audits(user_id=user_id, agent_id=agent_id)
+    _cleanup_old_thread_audits(user_id=user_id, agent_id=agent_id, gmail_account_email=gmail_account_email)
 
     return {
         "leads_found": leads_found,

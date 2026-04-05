@@ -91,6 +91,24 @@ def _resolve_agent_id_from_payload(payload: dict[str, Any] | None) -> str:
     return validate_agent_id(requested_agent_id)
 
 
+def _get_current_gmail_account_email(user_id: str, agent_id: str) -> str | None:
+    response = (
+        supabase.table("gmail_connections")
+        .select("email,status")
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        return None
+    row = response.data[0]
+    if row.get("status") == "disconnected":
+        return None
+    email = (row.get("email") or "").strip().lower()
+    return email or None
+
+
 def _run_initial_sync_after_connect(user_id: str, agent_id: str) -> None:
     try:
         credentials = get_credentials(user_id, agent_id=agent_id)
@@ -187,12 +205,14 @@ def gmail_send(
     _=Depends(require_active_subscription),
 ):
     agent_id = validate_agent_id(payload.agent_id)
+    gmail_account_email = _get_current_gmail_account_email(current_user.id, agent_id)
     thread_response = (
         supabase.table("lead_threads")
         .select("id,gmail_thread_id,contact_email")
         .eq("id", payload.thread_id)
         .eq("user_id", current_user.id)
         .eq("agent_id", agent_id)
+        .eq("gmail_account_email", gmail_account_email)
         .limit(1)
         .execute()
     )
@@ -273,5 +293,18 @@ def gmail_disconnect(
     current_user=Depends(get_current_user),
 ):
     agent_id = _resolve_agent_id_from_payload(payload)
-    supabase.table("gmail_connections").delete().eq("user_id", current_user.id).eq("agent_id", agent_id).execute()
+    (
+        supabase.table("gmail_connections")
+        .update(
+            {
+                "status": "disconnected",
+                "access_token": "",
+                "refresh_token": None,
+                "token_expiry": None,
+            }
+        )
+        .eq("user_id", current_user.id)
+        .eq("agent_id", agent_id)
+        .execute()
+    )
     return {"status": "disconnected"}
