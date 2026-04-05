@@ -11,6 +11,7 @@ from app.core.supabase import get_supabase
 from app.core.utils import parse_supabase_timestamp, sanitize_ai_context, sanitize_email_content
 from integrations.gmail.parser import parse_thread
 from pipeline.lead_classifier import classify_is_lead
+from integrations.gmail.auth import GmailConnectionExpiredError
 from services.email_service import send_gmail_disconnection_alert
 
 supabase = get_supabase()
@@ -535,7 +536,7 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
                 current_status=connection_status,
                 exc=exc,
             )
-            return _empty_sync_result()
+            raise GmailConnectionExpiredError("Gmail connection was disconnected. Please reconnect your Gmail account.") from exc
         raise
 
     last_synced_at = _get_last_synced_at(user_id=user_id, agent_id=agent_id)
@@ -580,7 +581,7 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
                     current_status=connection_status,
                     exc=exc,
                 )
-                return _empty_sync_result()
+                raise GmailConnectionExpiredError("Gmail connection was disconnected. Please reconnect your Gmail account.") from exc
             raise
         thread_refs = list_response.get("threads", [])
         if not thread_refs:
@@ -603,7 +604,7 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
                         current_status=connection_status,
                         exc=exc,
                     )
-                    return _empty_sync_result()
+                    raise GmailConnectionExpiredError("Gmail connection was disconnected. Please reconnect your Gmail account.") from exc
                 raise
             parsed_thread = parse_thread(raw_thread, owner_email=owner_email)
             gmail_thread_id = parsed_thread["gmail_thread_id"]

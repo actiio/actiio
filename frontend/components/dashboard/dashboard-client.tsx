@@ -573,7 +573,15 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
       pushToast(buildSyncToastMessage(data));
       await fetchThreads();
     } catch (error) {
-      pushToast("Leads sync failed.");
+      if (
+        (error instanceof Error && (error.message.toLowerCase().includes("reconnect") || error.message.toLowerCase().includes("disconnected"))) ||
+        (typeof error === "object" && error !== null && "status" in error && error.status === 401)
+      ) {
+        setGmailStatus("disconnected");
+        pushToast("Gmail disconnected. Please reconnect your account.");
+      } else {
+        pushToast("Leads sync failed.");
+      }
     } finally {
       setIsSyncing(false);
     }
