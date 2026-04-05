@@ -76,11 +76,6 @@ export async function getAgents(): Promise<AgentWithSubscription[]> {
   return apiFetch<AgentWithSubscription[]>("/api/agents");
 }
 
-// Alias for getAgents
-export async function getSubscriptions(): Promise<AgentWithSubscription[]> {
-  return getAgents();
-}
-
 export async function joinWaitlist(agentId: string): Promise<{ success: boolean }> {
   return apiFetch<{ success: boolean }>(`/api/agents/${agentId}/waitlist`, {
     method: "POST",

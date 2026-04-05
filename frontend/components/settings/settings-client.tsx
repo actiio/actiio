@@ -389,8 +389,8 @@ export function SettingsClient({
               {saveStatus === "saving" ? "Saving changes..." : saveStatus === "saved" ? "All changes saved" : saveStatus === "error" ? "Auto-save failed" : "Auto-save on"}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            {isOnboarding && setupComplete ? (
+          {isOnboarding && setupComplete ? (
+            <div className="flex items-center gap-3">
               <Button
                 variant="outline"
                 className="rounded-full px-6 font-black"
@@ -400,15 +400,8 @@ export function SettingsClient({
               >
                 Open Workspace
               </Button>
-            ) : null}
-            <Button
-              onClick={() => void save(true)}
-              disabled={saving}
-              className="rounded-full px-8 font-black shadow-lg shadow-brand-primary/20"
-            >
-              {saving ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save Now"}
-            </Button>
-          </div>
+            </div>
+          ) : null}
         </header>
 
         {isOnboarding ? (

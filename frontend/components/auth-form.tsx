@@ -9,6 +9,19 @@ import { Input } from "@/components/ui/input";
 import { hasUnsafeControlChars, safeRelativePath, sanitizeEmail } from "@/lib/sanitize";
 import { supabase } from "@/lib/supabase";
 
+function toFriendlyAuthError(message: string): string {
+  const normalized = message.trim().toLowerCase();
+  if (
+    normalized === "load failed" ||
+    normalized.includes("failed to fetch") ||
+    normalized.includes("networkerror") ||
+    normalized.includes("network request failed")
+  ) {
+    return "Could not reach authentication service. Please try again.";
+  }
+  return message;
+}
+
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -43,18 +56,29 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       return;
     }
 
-    const { error: authError } = isSignIn
-      ? await supabase.auth.signInWithPassword({ email: safeEmail, password })
-      : await supabase.auth.signUp({
-        email: safeEmail,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
+    let authError: { message: string } | null = null;
+
+    try {
+      const result = isSignIn
+        ? await supabase.auth.signInWithPassword({ email: safeEmail, password })
+        : await supabase.auth.signUp({
+          email: safeEmail,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+
+      authError = result.error;
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Authentication failed.";
+      setError(toFriendlyAuthError(message));
+      setLoading(false);
+      return;
+    }
 
     if (authError) {
-      setError(authError.message);
+      setError(toFriendlyAuthError(authError.message));
       setLoading(false);
       return;
     }

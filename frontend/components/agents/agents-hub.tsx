@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ function SkeletonCard() {
 
 export function AgentsHub() {
   const { pushToast } = useToast();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [agents, setAgents] = useState<AgentWithSubscription[]>([]);
   const [joiningWaitlistIds, setJoiningWaitlistIds] = useState<string[]>([]);
@@ -82,6 +84,12 @@ export function AgentsHub() {
 
     void init();
   }, [pushToast]);
+
+  useEffect(() => {
+    if (searchParams.get("subscribed") === "true") {
+      pushToast("Subscription active.");
+    }
+  }, [pushToast, searchParams]);
 
   const greeting = useMemo(() => {
     return `${greetingForHour(new Date().getHours())}.`;
@@ -149,9 +157,6 @@ export function AgentsHub() {
         <nav className="flex-1 space-y-1">
           <Link href="/agents" className="block rounded-xl bg-brand-primary/10 px-4 py-3 text-sm font-semibold text-brand-primary">
             Agents Hub
-          </Link>
-          <Link href="/subscriptions" className="block rounded-xl px-4 py-3 text-sm font-semibold text-brand-body/70 hover:bg-gray-50 hover:text-brand-heading">
-            Subscriptions
           </Link>
           <div className="pt-2">
             <SuggestSkillModal>

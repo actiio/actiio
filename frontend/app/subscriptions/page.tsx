@@ -1,5 +1,5 @@
-import { SubscriptionsClient } from "@/components/subscriptions/subscriptions-client";
+import { redirect } from "next/navigation";
 
 export default function SubscriptionsPage() {
-  return <SubscriptionsClient />;
+  redirect("/agents");
 }

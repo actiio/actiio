@@ -110,8 +110,8 @@ def create_checkout_session(request: Request, body: CheckoutRequest, current_use
             mode="subscription",
             customer=customer_id,
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url=f"{(settings.frontend_url or 'http://localhost:3000').rstrip('/')}/subscriptions?subscribed=true",
-            cancel_url=f"{(settings.frontend_url or 'http://localhost:3000').rstrip('/')}/subscriptions",
+            success_url=f"{(settings.frontend_url or 'http://localhost:3000').rstrip('/')}/agents?subscribed=true",
+            cancel_url=f"{(settings.frontend_url or 'http://localhost:3000').rstrip('/')}/agents",
             metadata={
                 "user_id": str(current_user.id),
                 "agent_id": agent_id,
@@ -229,7 +229,7 @@ def create_portal_session(current_user=Depends(get_current_user)):
     try:
         portal_session = stripe.billing_portal.Session.create(
             customer=customer_id,
-            return_url=f"{(settings.frontend_url or 'http://localhost:3000').rstrip('/')}/subscriptions",
+            return_url=f"{(settings.frontend_url or 'http://localhost:3000').rstrip('/')}/agents",
         )
     except Exception as exc:
         raise_internal_error(
