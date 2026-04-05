@@ -14,3 +14,4 @@ google-auth-httplib2==0.2.0
 google-api-python-client==2.156.0
 stripe==11.5.0
 slowapi==0.1.9
+resend==2.6.0

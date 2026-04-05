@@ -22,6 +22,7 @@ export type BusinessProfile = {
 
 export type LeadThread = {
   id: string;
+  disconnection_error?: boolean;
   contact_name: string | null;
   contact_email: string | null;
   contact_phone?: string | null;

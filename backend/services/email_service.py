@@ -4,13 +4,10 @@ import logging
 from typing import Optional
 
 from app.core.config import get_settings
+import resend
+
 
 logger = logging.getLogger(__name__)
-
-try:
-    import resend
-except ImportError:  # pragma: no cover - handled at runtime if dependency is missing
-    resend = None
 
 
 def _get_reconnect_url() -> str:
@@ -29,10 +26,6 @@ def send_gmail_disconnection_alert(user_email: Optional[str], gmail_email: Optio
 
     if not settings.resend_api_key:
         logger.warning("Skipping Gmail disconnection alert for %s because RESEND_API_KEY is not configured", user_email)
-        return
-
-    if resend is None:
-        logger.error("Failed to send Gmail disconnection alert for %s because the resend package is not installed", user_email)
         return
 
     reconnect_url = _get_reconnect_url()

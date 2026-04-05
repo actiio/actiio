@@ -527,7 +527,20 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
       );
       pushToast(`Drafts ready for ${thread.contact_name || thread.contact_email || "this lead"}.`);
     } catch (error) {
-      pushToast("Follow-up generation failed. Please try again.");
+      if (
+        (error instanceof Error && (error.message.toLowerCase().includes("reconnect") || error.message.toLowerCase().includes("disconnected"))) ||
+        (typeof error === "object" && error !== null && "status" in error && error.status === 401)
+      ) {
+        setGmailStatus("disconnected");
+        setThreads((prev) =>
+          prev.map((item) =>
+            item.id === thread.id ? { ...item, status: "needs_review", disconnection_error: true } : item
+          )
+        );
+        pushToast("Gmail disconnected. Please reconnect your account.");
+      } else {
+        pushToast("Follow-up generation failed. Please try again.");
+      }
     } finally {
       setGeneratingThreadIds((prev) => prev.filter((id) => id !== thread.id));
     }
@@ -818,7 +831,13 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
                         )}
                       </div>
                       <p className="line-clamp-2 text-sm leading-relaxed text-brand-body">
-                        {previewText(thread)}
+                        {thread.status === "needs_review" && thread.disconnection_error ? (
+                          <span className="text-orange-600 font-semibold italic">
+                            Your Gmail connection was disconnected. Please reconnect your Gmail account to generate drafts.
+                          </span>
+                        ) : (
+                          previewText(thread)
+                        )}
                       </p>
                       <div className="mt-1.5 flex items-center gap-1.5">
                         {(() => {
@@ -876,15 +895,25 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
                         </Button>
                       )}
                       {thread.status === "needs_review" && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="font-bold border-orange-200 text-orange-700 hover:bg-orange-50"
-                          onClick={() => void generateFollowUp(thread)}
-                          disabled={isGenerating}
-                        >
-                          {isGenerating ? "Retrying..." : "Retry"}
-                        </Button>
+                        thread.disconnection_error ? (
+                          <Button
+                            size="sm"
+                            className="font-bold bg-orange-600 text-white hover:bg-orange-700 shadow-lg shadow-orange-600/20"
+                            onClick={reconnectGmail}
+                          >
+                            Reconnect Gmail
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="font-bold border-orange-200 text-orange-700 hover:bg-orange-50"
+                            onClick={() => void generateFollowUp(thread)}
+                            disabled={isGenerating}
+                          >
+                            {isGenerating ? "Retrying..." : "Retry"}
+                          </Button>
+                        )
                       )}
                       {!thread.has_pending_draft && thread.status === "active" && (
                         <Button
