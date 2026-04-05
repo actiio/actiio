@@ -508,7 +508,26 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
         { method: "POST" }
       );
       if (result.status === "needs_review") {
-        setThreads((prev) => prev.map((item) => (item.id === thread.id ? { ...item, status: "needs_review" } : item)));
+        const isDisconnected = 
+          result.reason?.toLowerCase().includes("reconnect") || 
+          result.reason?.toLowerCase().includes("disconnected") ||
+          result.reason?.toLowerCase().includes("401") ||
+          result.reason?.toLowerCase().includes("invalid_grant");
+
+        setThreads((prev) =>
+          prev.map((item) =>
+            item.id === thread.id
+              ? { ...item, status: "needs_review", disconnection_error: isDisconnected || item.disconnection_error }
+              : item
+          )
+        );
+
+        if (isDisconnected) {
+          setGmailStatus("disconnected");
+          pushToast("Gmail disconnected. Please reconnect your account.");
+          return;
+        }
+
         const shortReason = result.reason?.includes("rate")
           ? "AI models are rate-limited. Please try again in a moment."
           : result.reason?.includes("All")

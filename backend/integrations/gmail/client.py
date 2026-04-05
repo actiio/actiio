@@ -31,3 +31,8 @@ def fetch_parsed_thread(user_id: str, agent_id: str, gmail_thread_id: str) -> Di
         return parse_thread(raw_thread, owner_email=owner_email)
     except (RefreshError, TransportError) as exc:
         raise GmailDisconnectedError("Gmail connection was disconnected. Please reconnect your Gmail account.") from exc
+    except Exception as exc:
+        error_text = str(exc).lower()
+        if "401" in error_text or "invalid_grant" in error_text:
+            raise GmailDisconnectedError("Gmail connection was disconnected. Please reconnect your Gmail account.") from exc
+        raise exc
