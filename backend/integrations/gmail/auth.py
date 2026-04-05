@@ -106,12 +106,24 @@ def _fetch_google_userinfo(access_token: str | None) -> Tuple[str, str | None]:
     return email, display_name
 
 
-def _mark_connection_disconnected(user_id: str, agent_id: str) -> None:
+def _get_active_connection(user_id: str, agent_id: str) -> Dict | None:
+    response = (
+        supabase.table("gmail_connections")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
+        .eq("is_active", True)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def _mark_connection_disconnected(connection_id: str) -> None:
     (
         supabase.table("gmail_connections")
         .update({"status": "disconnected"})
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
+        .eq("id", connection_id)
         .execute()
     )
 
@@ -125,6 +137,15 @@ def handle_callback(code: str, user_id: str, agent_id: str = "gmail_followup") -
     token_expiry = _to_aware_utc(credentials.expiry).isoformat() if credentials.expiry else None
 
     gmail_email, display_name = _fetch_google_userinfo(credentials.token)
+    normalized_email = gmail_email.strip().lower() if gmail_email else ""
+
+    (
+        supabase.table("gmail_connections")
+        .update({"is_active": False})
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
+        .execute()
+    )
 
     response = (
         supabase.table("gmail_connections")
@@ -132,14 +153,15 @@ def handle_callback(code: str, user_id: str, agent_id: str = "gmail_followup") -
             {
                 "user_id": user_id,
                 "agent_id": agent_id,
-                "email": gmail_email,
+                "email": normalized_email,
                 "display_name": display_name,
                 "access_token": credentials.token,
                 "refresh_token": credentials.refresh_token,
                 "token_expiry": token_expiry,
+                "is_active": True,
                 "status": "connected",
             },
-            on_conflict="user_id,agent_id",
+            on_conflict="user_id,agent_id,email",
         )
         .execute()
     )
@@ -149,19 +171,9 @@ def handle_callback(code: str, user_id: str, agent_id: str = "gmail_followup") -
 
 def get_credentials(user_id: str, agent_id: str = "gmail_followup") -> Credentials:
     settings = get_settings()
-    response = (
-        supabase.table("gmail_connections")
-        .select("*")
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .limit(1)
-        .execute()
-    )
-
-    if not response.data:
+    row = _get_active_connection(user_id, agent_id)
+    if not row:
         raise ValueError("Gmail connection not found for user")
-
-    row = response.data[0]
     expiry = row.get("token_expiry")
     parsed_expiry = None
     if expiry:
@@ -178,7 +190,7 @@ def get_credentials(user_id: str, agent_id: str = "gmail_followup") -> Credentia
     )
 
     if credentials.expired and not credentials.refresh_token:
-        _mark_connection_disconnected(user_id, agent_id)
+        _mark_connection_disconnected(row["id"])
         raise GmailConnectionExpiredError("Gmail connection is missing a refresh token")
 
     if credentials.expired and credentials.refresh_token:
@@ -187,7 +199,7 @@ def get_credentials(user_id: str, agent_id: str = "gmail_followup") -> Credentia
         except RefreshError as exc:
             error_text = str(exc).lower()
             if "invalid_grant" in error_text or "expired or revoked" in error_text:
-                _mark_connection_disconnected(user_id, agent_id)
+                _mark_connection_disconnected(row["id"])
                 raise GmailConnectionExpiredError("Gmail connection expired or was revoked") from exc
             raise
         new_expiry_dt = _to_aware_utc(credentials.expiry) if credentials.expiry else datetime.now(timezone.utc)
@@ -199,10 +211,10 @@ def get_credentials(user_id: str, agent_id: str = "gmail_followup") -> Credentia
                     "access_token": credentials.token,
                     "refresh_token": credentials.refresh_token,
                     "token_expiry": new_expiry,
+                    "status": "connected",
                 }
             )
-            .eq("user_id", user_id)
-            .eq("agent_id", agent_id)
+            .eq("id", row["id"])
             .execute()
         )
 

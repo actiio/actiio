@@ -29,8 +29,9 @@ def sync_all_gmail_accounts() -> None:
     logger.info("Automatic Gmail sync started")
     connections = (
         supabase.table("gmail_connections")
-        .select("user_id, agent_id, status")
+        .select("user_id, agent_id, status, is_active")
         .eq("agent_id", "gmail_followup")
+        .eq("is_active", True)
         .execute()
     )
     

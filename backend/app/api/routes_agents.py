@@ -21,12 +21,14 @@ def _requires_gmail(agent_id: str, channel: str | None) -> bool:
 
 def _safe_agent_id_set(table_name: str, user_id: str) -> set[str]:
     try:
-        response = (
+        query = (
             supabase.table(table_name)
             .select("agent_id")
             .eq("user_id", user_id)
-            .execute()
         )
+        if table_name == "gmail_connections":
+            query = query.eq("is_active", True).eq("status", "connected")
+        response = query.execute()
     except Exception:
         return set()
     return {row["agent_id"] for row in (response.data or []) if row.get("agent_id")}
@@ -94,6 +96,7 @@ def _last_synced_for_agent(user_id: str, agent_id: str) -> str | None:
             .select("last_synced_at,created_at")
             .eq("user_id", user_id)
             .eq("agent_id", agent_id)
+            .eq("is_active", True)
             .limit(1)
             .execute()
         )
@@ -139,13 +142,33 @@ def _is_waiting_on_lead(thread: dict) -> bool:
 
 def _thread_counts_for_agent(user_id: str, agent_id: str) -> dict[str, int | str | None]:
     # Fetch all threads for this user and agent in ONE query instead of multiple count calls
-    resp = (
+    query = (
         supabase.table("lead_threads")
         .select("id,status,last_inbound_at,last_outbound_at")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
-        .execute()
     )
+    if _requires_gmail(agent_id, None):
+        connection = (
+            supabase.table("gmail_connections")
+            .select("email,status")
+            .eq("user_id", user_id)
+            .eq("agent_id", agent_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        row = connection.data[0] if connection.data else {}
+        gmail_email = (row.get("email") or "").strip().lower()
+        if not gmail_email or row.get("status") == "disconnected":
+            return {
+                "needs_attention": 0,
+                "active_leads": 0,
+                "total_leads": 0,
+                "last_synced": _last_synced_for_agent(user_id, agent_id),
+            }
+        query = query.eq("gmail_account_email", gmail_email)
+    resp = query.execute()
     threads = resp.data or []
     visible_threads = [thread for thread in threads if thread.get("status") != "ignored"]
 

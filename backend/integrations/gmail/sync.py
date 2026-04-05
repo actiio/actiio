@@ -32,9 +32,10 @@ def _empty_sync_result() -> Dict[str, int]:
 def _get_gmail_connection(user_id: str, agent_id: str) -> Optional[Dict[str, Any]]:
     response = (
         supabase.table("gmail_connections")
-        .select("email,status")
+        .select("id,email,status,last_synced_at")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
+        .eq("is_active", True)
         .limit(1)
         .execute()
     )
@@ -62,6 +63,7 @@ def _is_gmail_disconnection_error(exc: Exception) -> bool:
 
 
 def _handle_gmail_disconnection(
+    connection_id: Optional[str],
     user_id: str,
     agent_id: str,
     gmail_email: Optional[str],
@@ -71,13 +73,13 @@ def _handle_gmail_disconnection(
     gmail_label = gmail_email or "unknown"
     already_disconnected = current_status == "disconnected"
 
-    (
-        supabase.table("gmail_connections")
-        .update({"status": "disconnected"})
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .execute()
-    )
+    if connection_id:
+        (
+            supabase.table("gmail_connections")
+            .update({"status": "disconnected"})
+            .eq("id", connection_id)
+            .execute()
+        )
 
     logger.warning(
         "Gmail disconnection detected for user_id=%s agent_id=%s gmail_email=%s: %s",
@@ -134,18 +136,10 @@ def _latest_message_info(messages: List[Dict[str, Any]]) -> tuple[Optional[str],
     return None, None
 
 
-def _get_last_synced_at(user_id: str, agent_id: str) -> Optional[datetime]:
-    response = (
-        supabase.table("gmail_connections")
-        .select("last_synced_at")
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .limit(1)
-        .execute()
-    )
-    if not response.data:
+def _get_last_synced_at(connection_row: Optional[Dict[str, Any]]) -> Optional[datetime]:
+    if not connection_row:
         return None
-    return parse_supabase_timestamp(response.data[0].get("last_synced_at"))
+    return parse_supabase_timestamp(connection_row.get("last_synced_at"))
 
 
 def _build_sync_query(last_synced_at: Optional[datetime]) -> str:
@@ -557,6 +551,7 @@ def _refresh_tracked_thread(
 def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_followup") -> Dict[str, int]:
     sync_started_at = datetime.now(timezone.utc)
     connection = _get_gmail_connection(user_id=user_id, agent_id=agent_id) or {}
+    connection_id = connection.get("id")
     connection_status = connection.get("status")
     owner_email = connection.get("email")
 
@@ -566,6 +561,7 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
     except Exception as exc:
         if _is_gmail_disconnection_error(exc):
             _handle_gmail_disconnection(
+                connection_id=connection_id,
                 user_id=user_id,
                 agent_id=agent_id,
                 gmail_email=owner_email,
@@ -575,14 +571,14 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
             raise GmailConnectionExpiredError("Gmail connection was disconnected. Please reconnect your Gmail account.") from exc
         raise
 
-    last_synced_at = _get_last_synced_at(user_id=user_id, agent_id=agent_id)
-    (
-        supabase.table("gmail_connections")
-        .update({"email": owner_email, "status": "connected"})
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .execute()
-    )
+    last_synced_at = _get_last_synced_at(connection)
+    if connection_id:
+        (
+            supabase.table("gmail_connections")
+            .update({"email": owner_email, "status": "connected"})
+            .eq("id", connection_id)
+            .execute()
+        )
     connection_status = "connected"
 
     query = _build_sync_query(last_synced_at)
@@ -612,6 +608,7 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
         except Exception as exc:
             if _is_gmail_disconnection_error(exc):
                 _handle_gmail_disconnection(
+                    connection_id=connection_id,
                     user_id=user_id,
                     agent_id=agent_id,
                     gmail_email=owner_email,
@@ -635,6 +632,7 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
             except Exception as exc:
                 if _is_gmail_disconnection_error(exc):
                     _handle_gmail_disconnection(
+                        connection_id=connection_id,
                         user_id=user_id,
                         agent_id=agent_id,
                         gmail_email=owner_email,
@@ -740,13 +738,13 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
         if not next_page_token:
             break
 
-    (
-        supabase.table("gmail_connections")
-        .update({"last_synced_at": sync_started_at.isoformat()})
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .execute()
-    )
+    if connection_id:
+        (
+            supabase.table("gmail_connections")
+            .update({"last_synced_at": sync_started_at.isoformat()})
+            .eq("id", connection_id)
+            .execute()
+        )
     _cleanup_old_thread_audits(user_id=user_id, agent_id=agent_id, gmail_account_email=gmail_account_email)
 
     return {

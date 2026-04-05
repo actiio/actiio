@@ -88,13 +88,14 @@ ALTER TABLE public.business_profiles
 
 create table if not exists public.gmail_connections (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null unique references public.users (id) on delete cascade,
+  user_id uuid not null references public.users (id) on delete cascade,
   agent_id text references public.agents(id) default 'gmail_followup',
   email text,
   display_name text,
   access_token text not null,
   refresh_token text,
   token_expiry timestamptz,
+  is_active boolean not null default true,
   status text default 'connected',
   last_synced_at timestamptz,
   created_at timestamptz not null default now()
@@ -252,8 +253,18 @@ ALTER TABLE public.gmail_connections
   DROP CONSTRAINT IF EXISTS gmail_connections_user_agent_unique;
 
 ALTER TABLE public.gmail_connections
-  ADD CONSTRAINT gmail_connections_user_agent_unique
-  UNIQUE (user_id, agent_id);
+  DROP CONSTRAINT IF EXISTS gmail_connections_user_agent_email_unique;
+
+ALTER TABLE public.gmail_connections
+  ADD CONSTRAINT gmail_connections_user_agent_email_unique
+  UNIQUE (user_id, agent_id, email);
+
+ALTER TABLE public.gmail_connections
+  ADD COLUMN IF NOT EXISTS is_active boolean not null default true;
+
+CREATE UNIQUE INDEX IF NOT EXISTS gmail_connections_one_active_per_agent_idx
+  ON public.gmail_connections (user_id, agent_id)
+  WHERE is_active = true;
 
 ALTER TABLE public.business_profiles
   ADD COLUMN IF NOT EXISTS agent_id text references public.agents(id) default 'gmail_followup';

@@ -29,6 +29,7 @@ def _get_current_gmail_account_email(user_id: str, agent_id: str) -> str | None:
         .select("email,status")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
+        .eq("is_active", True)
         .limit(1)
         .execute()
     )
