@@ -5,13 +5,99 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from google.auth.exceptions import RefreshError, TransportError
+
 from app.core.supabase import get_supabase
 from app.core.utils import parse_supabase_timestamp, sanitize_ai_context, sanitize_email_content
 from integrations.gmail.parser import parse_thread
 from pipeline.lead_classifier import classify_is_lead
+from services.email_service import send_gmail_disconnection_alert
 
 supabase = get_supabase()
 logger = logging.getLogger(__name__)
+
+
+def _empty_sync_result() -> Dict[str, int]:
+    return {
+        "leads_found": 0,
+        "updated_threads": 0,
+        "replied_threads": 0,
+        "classified_threads": 0,
+        "skipped_audited_threads": 0,
+        "processed_threads": 0,
+    }
+
+
+def _get_gmail_connection(user_id: str, agent_id: str) -> Optional[Dict[str, Any]]:
+    response = (
+        supabase.table("gmail_connections")
+        .select("email,status")
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def _get_user_email(user_id: str) -> Optional[str]:
+    response = (
+        supabase.table("users")
+        .select("email")
+        .eq("id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        return None
+    return response.data[0].get("email")
+
+
+def _is_gmail_disconnection_error(exc: Exception) -> bool:
+    if isinstance(exc, (TransportError, RefreshError)):
+        return True
+    error_text = str(exc).lower()
+    return "401" in error_text or "invalid_grant" in error_text
+
+
+def _handle_gmail_disconnection(
+    user_id: str,
+    agent_id: str,
+    gmail_email: Optional[str],
+    current_status: Optional[str],
+    exc: Exception,
+) -> None:
+    gmail_label = gmail_email or "unknown"
+    already_disconnected = current_status == "disconnected"
+
+    (
+        supabase.table("gmail_connections")
+        .update({"status": "disconnected"})
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
+        .execute()
+    )
+
+    logger.warning(
+        "Gmail disconnection detected for user_id=%s agent_id=%s gmail_email=%s: %s",
+        user_id,
+        agent_id,
+        gmail_label,
+        exc,
+    )
+
+    if already_disconnected:
+        return
+
+    user_email = _get_user_email(user_id)
+    send_gmail_disconnection_alert(user_email=user_email, gmail_email=gmail_label)
+    logger.info(
+        "Gmail disconnection alert processed for user_id=%s agent_id=%s gmail_email=%s user_email=%s",
+        user_id,
+        agent_id,
+        gmail_label,
+        user_email or "unknown",
+    )
 
 
 def _build_preview_snippet(content: str | None, limit: int = 120) -> str:
@@ -433,16 +519,34 @@ def _refresh_tracked_thread(user_id: str, agent_id: str, parsed_thread: Dict[str
 
 def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_followup") -> Dict[str, int]:
     sync_started_at = datetime.now(timezone.utc)
-    profile = gmail_service.users().getProfile(userId="me").execute()
-    owner_email = profile.get("emailAddress")
+    connection = _get_gmail_connection(user_id=user_id, agent_id=agent_id) or {}
+    connection_status = connection.get("status")
+    owner_email = connection.get("email")
+
+    try:
+        profile = gmail_service.users().getProfile(userId="me").execute()
+        owner_email = profile.get("emailAddress") or owner_email
+    except Exception as exc:
+        if _is_gmail_disconnection_error(exc):
+            _handle_gmail_disconnection(
+                user_id=user_id,
+                agent_id=agent_id,
+                gmail_email=owner_email,
+                current_status=connection_status,
+                exc=exc,
+            )
+            return _empty_sync_result()
+        raise
+
     last_synced_at = _get_last_synced_at(user_id=user_id, agent_id=agent_id)
     (
         supabase.table("gmail_connections")
-        .update({"email": owner_email})
+        .update({"email": owner_email, "status": "connected"})
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
         .execute()
     )
+    connection_status = "connected"
 
     query = _build_sync_query(last_synced_at)
     logger.info("Running Gmail sync for user %s with query: %s", user_id, query)
@@ -465,7 +569,19 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
         if next_page_token:
             list_kwargs["pageToken"] = next_page_token
 
-        list_response = gmail_service.users().threads().list(**list_kwargs).execute()
+        try:
+            list_response = gmail_service.users().threads().list(**list_kwargs).execute()
+        except Exception as exc:
+            if _is_gmail_disconnection_error(exc):
+                _handle_gmail_disconnection(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    gmail_email=owner_email,
+                    current_status=connection_status,
+                    exc=exc,
+                )
+                return _empty_sync_result()
+            raise
         thread_refs = list_response.get("threads", [])
         if not thread_refs:
             break
@@ -476,7 +592,19 @@ def initial_sync(user_id: str, gmail_service: Any, agent_id: str = "gmail_follow
                 continue
 
             processed_threads += 1
-            raw_thread = gmail_service.users().threads().get(userId="me", id=gmail_thread_id, format="full").execute()
+            try:
+                raw_thread = gmail_service.users().threads().get(userId="me", id=gmail_thread_id, format="full").execute()
+            except Exception as exc:
+                if _is_gmail_disconnection_error(exc):
+                    _handle_gmail_disconnection(
+                        user_id=user_id,
+                        agent_id=agent_id,
+                        gmail_email=owner_email,
+                        current_status=connection_status,
+                        exc=exc,
+                    )
+                    return _empty_sync_result()
+                raise
             parsed_thread = parse_thread(raw_thread, owner_email=owner_email)
             gmail_thread_id = parsed_thread["gmail_thread_id"]
 

@@ -7,7 +7,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from app.core.supabase import get_supabase
 
 from googleapiclient.discovery import build
-from integrations.gmail.auth import get_credentials
+from integrations.gmail.auth import GmailConnectionExpiredError, get_credentials
 from integrations.gmail.sync import initial_sync
 
 logging.basicConfig(
@@ -29,7 +29,7 @@ def sync_all_gmail_accounts() -> None:
     logger.info("Automatic Gmail sync started")
     connections = (
         supabase.table("gmail_connections")
-        .select("user_id, agent_id")
+        .select("user_id, agent_id, status")
         .eq("agent_id", "gmail_followup")
         .execute()
     )
@@ -47,6 +47,9 @@ def sync_all_gmail_accounts() -> None:
     for conn in connections.data:
         user_id = conn["user_id"]
         agent_id = conn["agent_id"]
+        if conn.get("status") == "disconnected":
+            logger.info("Skipping Gmail sync for disconnected connection user_id=%s agent_id=%s", user_id, agent_id)
+            continue
         
         try:
             credentials = get_credentials(user_id, agent_id=agent_id)
@@ -67,6 +70,9 @@ def sync_all_gmail_accounts() -> None:
                 replied_threads,
                 updated_threads,
             )
+        except GmailConnectionExpiredError as exc:
+            failures += 1
+            logger.warning("Sync skipped for user %s (%s): Gmail connection expired: %s", user_id, agent_id, exc)
         except Exception as exc:
             failures += 1
             logger.error("Sync failed for user %s (%s): %s", user_id, agent_id, exc)

@@ -95,6 +95,7 @@ create table if not exists public.gmail_connections (
   access_token text not null,
   refresh_token text,
   token_expiry timestamptz,
+  status text default 'connected',
   last_synced_at timestamptz,
   created_at timestamptz not null default now()
 );

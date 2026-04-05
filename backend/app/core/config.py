@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     google_client_secret: Optional[str] = Field(default=None, validation_alias="GOOGLE_CLIENT_SECRET")
     google_redirect_uri: Optional[str] = Field(default=None, validation_alias="GOOGLE_REDIRECT_URI")
     frontend_url: Optional[str] = Field(default="http://localhost:3000", validation_alias="FRONTEND_URL")
+    resend_api_key: Optional[str] = Field(default=None, validation_alias="RESEND_API_KEY")
     app_secret_key: Optional[str] = Field(default=None, validation_alias="APP_SECRET_KEY")
     stripe_secret_key: Optional[str] = Field(default=None, validation_alias="STRIPE_SECRET_KEY")
     stripe_webhook_secret: Optional[str] = Field(default=None, validation_alias="STRIPE_WEBHOOK_SECRET")

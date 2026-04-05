@@ -6,6 +6,7 @@ from typing import Dict, Tuple
 from urllib.error import URLError
 from urllib.request import Request as UrlRequest, urlopen
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -24,6 +25,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.modify",
 ]
+
+
+class GmailConnectionExpiredError(Exception):
+    """Raised when a stored Gmail OAuth connection can no longer be refreshed."""
 
 
 def _to_aware_utc(dt: datetime) -> datetime:
@@ -101,6 +106,10 @@ def _fetch_google_userinfo(access_token: str | None) -> Tuple[str, str | None]:
     return email, display_name
 
 
+def _clear_connection(user_id: str, agent_id: str) -> None:
+    supabase.table("gmail_connections").delete().eq("user_id", user_id).eq("agent_id", agent_id).execute()
+
+
 def handle_callback(code: str, user_id: str, agent_id: str = "gmail_followup") -> Dict:
     settings = get_settings()
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=settings.google_redirect_uri)
@@ -122,6 +131,7 @@ def handle_callback(code: str, user_id: str, agent_id: str = "gmail_followup") -
                 "access_token": credentials.token,
                 "refresh_token": credentials.refresh_token,
                 "token_expiry": token_expiry,
+                "status": "connected",
             },
             on_conflict="user_id,agent_id",
         )
@@ -161,8 +171,19 @@ def get_credentials(user_id: str, agent_id: str = "gmail_followup") -> Credentia
         expiry=parsed_expiry,
     )
 
+    if credentials.expired and not credentials.refresh_token:
+        _clear_connection(user_id, agent_id)
+        raise GmailConnectionExpiredError("Gmail connection is missing a refresh token")
+
     if credentials.expired and credentials.refresh_token:
-        credentials.refresh(Request())
+        try:
+            credentials.refresh(Request())
+        except RefreshError as exc:
+            error_text = str(exc).lower()
+            if "invalid_grant" in error_text or "expired or revoked" in error_text:
+                _clear_connection(user_id, agent_id)
+                raise GmailConnectionExpiredError("Gmail connection expired or was revoked") from exc
+            raise
         new_expiry_dt = _to_aware_utc(credentials.expiry) if credentials.expiry else datetime.now(timezone.utc)
         new_expiry = new_expiry_dt.isoformat()
         (

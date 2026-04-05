@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from googleapiclient.discovery import build
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -16,7 +16,7 @@ from app.core.rate_limit import enforce_send_quota
 from app.core.sanitization import sanitize_payload
 from app.core.supabase import get_supabase
 from app.core.utils import raise_internal_error
-from integrations.gmail.auth import get_auth_url, get_credentials, handle_callback, parse_state
+from integrations.gmail.auth import GmailConnectionExpiredError, get_auth_url, get_credentials, handle_callback, parse_state
 from integrations.gmail.sender import send_gmail
 from integrations.gmail.sync import initial_sync
 from integrations.gmail.sync import initial_sync
@@ -95,6 +95,8 @@ def _run_initial_sync_after_connect(user_id: str, agent_id: str) -> None:
         credentials = get_credentials(user_id, agent_id=agent_id)
         service = build("gmail", "v1", credentials=credentials, cache_discovery=False)
         initial_sync(user_id, service, agent_id=agent_id)
+    except GmailConnectionExpiredError as exc:
+        logger.warning("Post-connect Gmail auth expired for user %s (%s): %s", user_id, agent_id, exc)
     except Exception as exc:
         logger.warning("Post-connect Gmail sync failed for user %s (%s): %s", user_id, agent_id, exc)
 
@@ -159,6 +161,11 @@ def gmail_sync(
             .limit(1)
             .execute()
         )
+    except GmailConnectionExpiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Gmail connection expired. Please reconnect your Gmail account.",
+        ) from exc
     except Exception as exc:
         raise_internal_error(logger, message="Failed to sync Gmail inbox", exc=exc, detail="Failed to sync Gmail inbox.")
 
@@ -224,6 +231,11 @@ def gmail_send(
             attachments=clean_payload.get("attachments"),
             selected_draft=clean_payload.get("selected_draft"),
         )
+    except GmailConnectionExpiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Gmail connection expired. Please reconnect your Gmail account.",
+        ) from exc
     except Exception as exc:
         raise_internal_error(logger, message="Failed to send Gmail reply", exc=exc, detail="Failed to send Gmail reply.")
 

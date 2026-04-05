@@ -57,6 +57,52 @@ class BusinessProfileUpsert(BaseModel):
     email_footer: Optional[str] = Field(default=None, max_length=2000)
     sales_assets: list[SalesAsset] = Field(default_factory=list)
 
+    @field_validator("agent_id", mode="before")
+    @classmethod
+    def normalize_agent_id(cls, value: Any) -> str:
+        return _clip_text(value, default="gmail_followup", max_length=120)
+
+    @field_validator("business_name", mode="before")
+    @classmethod
+    def normalize_business_name(cls, value: Any) -> str:
+        return _clip_text(value, default="", max_length=150)
+
+    @field_validator("industry", mode="before")
+    @classmethod
+    def normalize_industry(cls, value: Any) -> str:
+        return _clip_text(value, default="", max_length=100)
+
+    @field_validator("target_customer", mode="before")
+    @classmethod
+    def normalize_target_customer(cls, value: Any) -> str:
+        return _clip_text(value, default="", max_length=2000)
+
+    @field_validator("core_offer", mode="before")
+    @classmethod
+    def normalize_core_offer(cls, value: Any) -> str:
+        return _clip_text(value, default="", max_length=3000)
+
+    @field_validator("price_range", mode="before")
+    @classmethod
+    def normalize_price_range(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        return _clip_text(value, default="", max_length=100)
+
+    @field_validator("differentiator", mode="before")
+    @classmethod
+    def normalize_differentiator(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        return _clip_text(value, default="", max_length=3000)
+
+    @field_validator("email_footer", mode="before")
+    @classmethod
+    def normalize_email_footer(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        return _clip_text(value, default="", max_length=2000)
+
     @field_validator("sales_assets", mode="before")
     @classmethod
     def normalize_sales_assets(cls, value: Any) -> list[dict[str, Any]]:
