@@ -106,8 +106,14 @@ def _fetch_google_userinfo(access_token: str | None) -> Tuple[str, str | None]:
     return email, display_name
 
 
-def _clear_connection(user_id: str, agent_id: str) -> None:
-    supabase.table("gmail_connections").delete().eq("user_id", user_id).eq("agent_id", agent_id).execute()
+def _mark_connection_disconnected(user_id: str, agent_id: str) -> None:
+    (
+        supabase.table("gmail_connections")
+        .update({"status": "disconnected"})
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
+        .execute()
+    )
 
 
 def handle_callback(code: str, user_id: str, agent_id: str = "gmail_followup") -> Dict:
@@ -172,7 +178,7 @@ def get_credentials(user_id: str, agent_id: str = "gmail_followup") -> Credentia
     )
 
     if credentials.expired and not credentials.refresh_token:
-        _clear_connection(user_id, agent_id)
+        _mark_connection_disconnected(user_id, agent_id)
         raise GmailConnectionExpiredError("Gmail connection is missing a refresh token")
 
     if credentials.expired and credentials.refresh_token:
@@ -181,7 +187,7 @@ def get_credentials(user_id: str, agent_id: str = "gmail_followup") -> Credentia
         except RefreshError as exc:
             error_text = str(exc).lower()
             if "invalid_grant" in error_text or "expired or revoked" in error_text:
-                _clear_connection(user_id, agent_id)
+                _mark_connection_disconnected(user_id, agent_id)
                 raise GmailConnectionExpiredError("Gmail connection expired or was revoked") from exc
             raise
         new_expiry_dt = _to_aware_utc(credentials.expiry) if credentials.expiry else datetime.now(timezone.utc)
