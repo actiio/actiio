@@ -11,6 +11,7 @@ from app.schemas.auth import (
     AuthResponse,
     ForgotPasswordRequest,
     SignInRequest,
+    SignUpResponse,
     SignUpRequest,
     UserResponse,
 )
@@ -21,7 +22,7 @@ settings = get_settings()
 supabase = get_supabase()
 
 
-@router.post("/sign-up", response_model=AuthResponse)
+@router.post("/sign-up", response_model=SignUpResponse)
 @limiter.limit("5/minute", key_func=get_remote_address)
 def sign_up_route(payload: SignUpRequest, request: Request):
     safe_email = sanitize_email(payload.email)
@@ -32,8 +33,8 @@ def sign_up_route(payload: SignUpRequest, request: Request):
         per_email_ip_limit=settings.auth_attempt_limit_per_15min,
         per_email_ip_window_seconds=15 * 60,
     )
-    tokens = sign_up(safe_email, payload.password)
-    return AuthResponse(**tokens)
+    result = sign_up(safe_email, payload.password)
+    return SignUpResponse(**result)
 
 
 @router.post("/sign-in", response_model=AuthResponse)

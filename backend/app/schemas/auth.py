@@ -29,6 +29,10 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class SignUpResponse(BaseModel):
+    message: str
+
+
 class UserResponse(BaseModel):
     id: str
     email: Optional[EmailStr] = None

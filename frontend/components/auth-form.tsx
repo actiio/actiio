@@ -88,7 +88,7 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
         authError = authResult.error;
       } else {
         // Sign up through our backend to trigger custom Resend emails
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/sign-up`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/sign-up`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: safeEmail, password }),
