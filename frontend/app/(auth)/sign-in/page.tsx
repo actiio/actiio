@@ -11,6 +11,9 @@ export default async function SignInPage(props: {
 }) {
   const user = await getServerUser();
   const searchParams = await props.searchParams;
+  
+  // Check if this is a payment return/handoff based on URL params
+  const isPaymentReturn = !!(searchParams.subscription_id || searchParams.order_id || searchParams.autopay);
 
   if (user) {
     // If already signed in, redirect immediately on the server
@@ -25,6 +28,40 @@ export default async function SignInPage(props: {
     
     nextPath = mergeQueryParams(nextPath, params);
     redirect(nextPath);
+  }
+
+  // If this is a payment return but we don't have a user session yet, 
+  // show a clean loading state instead of the full sign-in branding to avoid a "flash".
+  // The AuthForm will handle the client-side session detection and redirect.
+  if (isPaymentReturn) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center">
+        <div className="w-full max-w-sm space-y-8">
+          <div className="flex justify-center">
+            <Image src="/logo.png" alt="Actiio Logo" width={64} height={64} className="h-16 w-auto animate-pulse" />
+          </div>
+          <div className="space-y-3">
+            <h1 className="text-3xl font-black tracking-tight text-brand-heading">One second</h1>
+            <p className="text-brand-body/60 font-medium">
+              We're verifying your account and finishing your setup...
+            </p>
+          </div>
+          <div className="pt-4">
+             <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                <div className="h-full w-2/3 animate-[loading_2s_ease-in-out_infinite] rounded-full bg-brand-primary"></div>
+             </div>
+          </div>
+          {/* We still render AuthForm hiddenly or for its effects, or just wait for client-side to take over */}
+          <AuthForm mode="sign-in" isSilent />
+        </div>
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+          }
+        `}} />
+      </main>
+    );
   }
 
   return (

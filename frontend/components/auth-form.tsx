@@ -22,7 +22,7 @@ function toFriendlyAuthError(message: string): string {
   return message;
 }
 
-export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
+export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-in" | "sign-up"; isSilent?: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -115,6 +115,8 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
     router.push(nextPath);
     router.refresh();
   }
+
+  if (isSilent) return null;
 
   return (
     <div className="w-full max-w-sm space-y-8">
