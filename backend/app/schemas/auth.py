@@ -35,3 +35,7 @@ class UserResponse(BaseModel):
     display_name: Optional[str] = None
     subscription_status: Optional[str] = None
     gmail_display_name: Optional[str] = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr

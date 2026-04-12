@@ -18,14 +18,17 @@ export default function ForgotPasswordPage() {
     setStatus("default");
     const safeEmail = sanitizeEmail(email);
 
-    const { error } = await supabase.auth.resetPasswordForEmail(safeEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: safeEmail }),
     });
 
     setLoading(false);
-    if (error) {
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
       setStatus("error");
-      setErrorMsg(error.message || "Something went wrong. Try again.");
+      setErrorMsg(data.detail || "Something went wrong. Try again.");
     } else {
       setEmail(safeEmail);
       setStatus("success");

@@ -7,8 +7,14 @@ from app.core.rate_limit import enforce_auth_attempt_limit
 from app.core.sanitization import sanitize_email
 from app.core.supabase import get_supabase
 from app.api.deps import get_current_user
-from app.schemas.auth import AuthResponse, SignInRequest, SignUpRequest, UserResponse
-from app.services.auth_service import sign_in, sign_up
+from app.schemas.auth import (
+    AuthResponse,
+    ForgotPasswordRequest,
+    SignInRequest,
+    SignUpRequest,
+    UserResponse,
+)
+from app.services.auth_service import request_password_reset, sign_in, sign_up
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -99,3 +105,20 @@ def me(current_user=Depends(get_current_user)):
         subscription_status=subscription_status,
         gmail_display_name=gmail_display_name,
     )
+
+
+@router.post("/forgot-password")
+@limiter.limit("5/minute", key_func=get_remote_address)
+def forgot_password_route(payload: ForgotPasswordRequest, request: Request):
+    safe_email = sanitize_email(payload.email)
+    enforce_auth_attempt_limit(
+        request=request,
+        email=safe_email,
+        action="forgot-password",
+        per_email_ip_limit=settings.auth_attempt_limit_per_15min,
+        per_email_ip_window_seconds=15 * 60,
+    )
+    # Redirect back to the frontend reset-password page
+    redirect_to = f"{settings.frontend_url}/reset-password"
+    request_password_reset(safe_email, redirect_to)
+    return {"message": "If that email exists, a reset link has been sent."}

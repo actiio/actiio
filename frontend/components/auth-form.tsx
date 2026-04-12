@@ -83,17 +83,31 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
     let authResult: any = null;
 
     try {
-      authResult = isSignIn
-        ? await supabase.auth.signInWithPassword({ email: safeEmail, password })
-        : await supabase.auth.signUp({
-          email: safeEmail,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
+      if (isSignIn) {
+        authResult = await supabase.auth.signInWithPassword({ email: safeEmail, password });
+        authError = authResult.error;
+      } else {
+        // Sign up through our backend to trigger custom Resend emails
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/sign-up`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: safeEmail, password }),
         });
-
-      authError = authResult.error;
+        
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          authError = { message: data.detail || "Sign up failed." };
+        } else {
+          authResult = { data: await res.json(), error: null };
+          // If signup returned tokens (meaning email confirm is off), set the session
+          if (authResult.data.access_token) {
+            await supabase.auth.setSession({
+              access_token: authResult.data.access_token,
+              refresh_token: authResult.data.refresh_token,
+            });
+          }
+        }
+      }
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Authentication failed.";
       setError(toFriendlyAuthError(message));
