@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { hasUnsafeControlChars, mergeQueryParams, safeRelativePath, sanitizeEmail } from "@/lib/sanitize";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/components/ui/toast";
 
 function toFriendlyAuthError(message: string): string {
   const normalized = message.trim().toLowerCase();
@@ -24,10 +25,13 @@ function toFriendlyAuthError(message: string): string {
 
 export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-in" | "sign-up"; isSilent?: boolean }) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const initialEmail = searchParams?.get("email") || "";
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { pushToast } = useToast();
 
   const isSignIn = mode === "sign-in";
 
@@ -98,15 +102,25 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
 
     if (authError) {
       if (!isSignIn && (authError.message.toLowerCase().includes("already registered") || authError.message.toLowerCase().includes("already exists"))) {
-        setError("An account with this email already exists.");
-      } else {
-        setError(toFriendlyAuthError(authError.message));
+        pushToast("An account already exists with this email. Please sign in instead.");
+        router.push(`/sign-in?email=${encodeURIComponent(safeEmail)}`);
+        return;
       }
+      setError(toFriendlyAuthError(authError.message));
       setLoading(false);
       return;
     }
 
     if (!isSignIn) {
+      // Supabase email enumeration protection: if the user already exists, 
+      // result.data.user?.identities is often an empty array [].
+      const user = result.data.user;
+      if (user && user.identities && user.identities.length === 0) {
+        pushToast("An account already exists with this email. Please sign in instead.");
+        router.push(`/sign-in?email=${encodeURIComponent(safeEmail)}`);
+        return;
+      }
+
       setError("Please check your email to confirm your account.");
       setLoading(false);
       return;
@@ -175,13 +189,6 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
         {error && (
           <div className={`p-4 rounded-xl text-sm ${error.includes("check your email") ? "bg-blue-50 text-blue-700 border border-blue-100" : "bg-red-50 text-red-600 border border-red-100"}`}>
             {error}
-            {error === "An account with this email already exists." && (
-              <div className="mt-2 text-xs font-bold uppercase tracking-wider">
-                <Link href="/sign-in" className="hover:underline">
-                  Sign in instead →
-                </Link>
-              </div>
-            )}
           </div>
         )}
 
