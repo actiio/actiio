@@ -191,6 +191,8 @@ export function AgentsHub() {
           pushToast("Autopay is now active! 🎉");
         } else if (status?.status === "active" || status?.status === "payment_pending") {
           pushToast("Cashfree is still confirming autopay. Check back shortly.");
+        } else {
+          pushToast("Autopay setup could not be completed. Please try again or contact support.", "error");
         }
         
         // Refresh the agents list so the card reflects the latest state
@@ -704,8 +706,6 @@ export function AgentsHub() {
                   const showSubscribe = agent.status === "active";
                   const subscribeLabel = isExpired
                     ? "Renew — ₹499"
-                    : isFailed
-                    ? "Retry payment — ₹499"
                     : "Subscribe — ₹499";
 
                   return (
@@ -718,8 +718,6 @@ export function AgentsHub() {
                             {agent.status === "active"
                               ? isExpired
                                 ? "Subscription expired"
-                                : isFailed
-                                ? "Payment failed"
                                 : `₹${agent.price_inr}/month`
                               : "Coming soon"}
                           </p>
