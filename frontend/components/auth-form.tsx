@@ -80,9 +80,10 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
     }
 
     let authError: { message: string } | null = null;
+    let authResult: any = null;
 
     try {
-      const result = isSignIn
+      authResult = isSignIn
         ? await supabase.auth.signInWithPassword({ email: safeEmail, password })
         : await supabase.auth.signUp({
           email: safeEmail,
@@ -92,7 +93,7 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
           },
         });
 
-      authError = result.error;
+      authError = authResult.error;
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Authentication failed.";
       setError(toFriendlyAuthError(message));
@@ -113,8 +114,8 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
 
     if (!isSignIn) {
       // Supabase email enumeration protection: if the user already exists, 
-      // result.data.user?.identities is often an empty array [].
-      const user = result.data.user;
+      // authResult.data.user?.identities is often an empty array [].
+      const user = authResult.data?.user;
       if (user && user.identities && user.identities.length === 0) {
         pushToast("An account already exists with this email. Please sign in instead.");
         router.push(`/sign-in?email=${encodeURIComponent(safeEmail)}`);
