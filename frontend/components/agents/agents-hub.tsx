@@ -155,6 +155,40 @@ export function AgentsHub() {
     }
   }, [pushToast, searchParams]);
 
+  // Handle Cashfree autopay return redirect:
+  // e.g. /agents?subscription_id=ACTIIO-SUB-...&agent_id=gmail_followup&autopay=true
+  useEffect(() => {
+    const agentId = searchParams.get("agent_id");
+    const isAutopay = searchParams.get("autopay") === "true";
+    if (!agentId || !isAutopay) return;
+
+    // Clean the URL so a refresh doesn't re-trigger this
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("subscription_id");
+    cleanUrl.searchParams.delete("agent_id");
+    cleanUrl.searchParams.delete("autopay");
+    window.history.replaceState({}, "", cleanUrl.pathname + (cleanUrl.search || ""));
+
+    // Show immediate feedback and then poll for confirmation
+    pushToast("Autopay setup received — checking status…");
+    void (async () => {
+      // Give Cashfree's webhook a few seconds to fire first
+      await new Promise((r) => setTimeout(r, 4000));
+      const status = await fetchSubStatus(agentId);
+      if (status?.status === "active" && status.autopay_enabled) {
+        pushToast("Autopay is now active! 🎉");
+      } else if (status?.status === "active" || status?.status === "payment_pending") {
+        pushToast("Cashfree is still confirming autopay. Check back shortly.");
+      }
+      // Refresh the agents list so the card reflects the latest state
+      try {
+        const data = await getAgents();
+        setAgents(data);
+      } catch { /* best-effort */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount only
+
   // Cleanup poll timer on unmount
   useEffect(() => {
     return () => {

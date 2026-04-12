@@ -32,9 +32,18 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const isSignIn = mode === "sign-in";
 
   useEffect(() => {
-    // This perfectly handles the edge-case where the user clicks the email link 
-    // and logs in via a new tab. This original tab will instantly auto-redirect!
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    // If already signed in (e.g. Cashfree autopay redirected back to /sign-in),
+    // redirect immediately rather than waiting for a new SIGNED_IN event.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        const nextPath = safeRelativePath(new URLSearchParams(window.location.search).get("next"));
+        router.push(nextPath);
+        router.refresh();
+      }
+    });
+
+    // Also handle the email-link new-tab case: redirect when auth state changes to SIGNED_IN.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN") {
         const nextPath = safeRelativePath(new URLSearchParams(window.location.search).get("next"));
         router.push(nextPath);
