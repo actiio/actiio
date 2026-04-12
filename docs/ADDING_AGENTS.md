@@ -43,13 +43,14 @@ frontend/app/agents/new_agent/
 
 The agent will appear automatically in `/agents` from the `agents` table.
 
-## Step 4 — Stripe
+## Step 4 — Pricing
 
-Create the product and prices in Stripe, then update the agent row:
+Update the agent's price if needed (default is ₹499/month):
 
 ```sql
 UPDATE agents
-SET stripe_free_price_id = 'price_xxx',
-    stripe_pro_price_id = 'price_yyy'
+SET price_inr = 499
 WHERE id = 'new_agent';
 ```
+
+Subscriptions are handled automatically via Cashfree — no per-agent price ID configuration needed.

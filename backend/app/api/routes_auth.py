@@ -75,21 +75,10 @@ def me(current_user=Depends(get_current_user)):
             subscription_status = "active"
         elif "past_due" in statuses:
             subscription_status = "past_due"
-        elif "canceled" in statuses:
-            subscription_status = "canceled"
-        elif "inactive" in statuses:
-            subscription_status = "inactive"
-    else:
-        # Fall back to legacy users.subscription_status
-        user_row = (
-            supabase.table("users")
-            .select("subscription_status")
-            .eq("id", current_user.id)
-            .limit(1)
-            .execute()
-        )
-        if user_row.data:
-            subscription_status = user_row.data[0].get("subscription_status")
+        elif "cancelled" in statuses:
+            subscription_status = "cancelled"
+        elif "pending" in statuses:
+            subscription_status = "pending"
 
     gmail_row = (
         supabase.table("gmail_connections")

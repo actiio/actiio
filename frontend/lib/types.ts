@@ -82,10 +82,7 @@ export type Agent = {
   description: string;
   icon: string;
   channel?: "gmail" | "any" | null;
-  free_price_inr: number;
-  pro_price_inr: number;
-  stripe_free_price_id: string | null;
-  stripe_pro_price_id: string | null;
+  price_inr: number;
   status: "active" | "coming_soon";
   sort_order?: number;
   created_at: string;
@@ -95,12 +92,24 @@ export type UserSubscription = {
   id: string;
   user_id: string;
   agent_id: string;
-  stripe_subscription_id: string | null;
-  stripe_customer_id: string | null;
-  plan: "free" | "pro";
-  status: "active" | "inactive" | "past_due" | "canceled";
+  cashfree_order_id?: string | null;
+  cashfree_payment_id?: string | null;
+  cashfree_subscription_id?: string | null;
+  autopay_enabled: boolean;
+  status: "inactive" | "payment_pending" | "active" | "expired" | "payment_failed";
+  current_period_start: string | null;
   current_period_end: string | null;
   created_at: string;
+  updated_at: string;
+};
+
+export type SubscriptionStatus = {
+  agent_id?: string;
+  status: "none" | "inactive" | "payment_pending" | "active" | "expired" | "payment_failed";
+  current_period_end: string | null;
+  days_remaining: number;
+  autopay_enabled: boolean;
+  cashfree_subscription_id?: string | null;
 };
 
 export type AgentWithSubscription = {

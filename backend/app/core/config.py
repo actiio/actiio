@@ -22,15 +22,16 @@ class Settings(BaseSettings):
     frontend_url: Optional[str] = Field(default="http://localhost:3000", validation_alias="FRONTEND_URL")
     resend_api_key: Optional[str] = Field(default=None, validation_alias="RESEND_API_KEY")
     app_secret_key: Optional[str] = Field(default=None, validation_alias="APP_SECRET_KEY")
-    stripe_secret_key: Optional[str] = Field(default=None, validation_alias="STRIPE_SECRET_KEY")
-    stripe_webhook_secret: Optional[str] = Field(default=None, validation_alias="STRIPE_WEBHOOK_SECRET")
-    stripe_price_id: Optional[str] = Field(default=None, validation_alias="STRIPE_PRICE_ID")
-    stripe_actiio_free_price_id: Optional[str] = Field(default=None, validation_alias="STRIPE_ACTIIO_FREE_PRICE_ID")
-    stripe_actiio_pro_price_id: Optional[str] = Field(default=None, validation_alias="STRIPE_ACTIIO_PRO_PRICE_ID")
+    cashfree_app_id: Optional[str] = Field(default=None, validation_alias="CASHFREE_APP_ID")
+    cashfree_secret_key: Optional[str] = Field(default=None, validation_alias="CASHFREE_SECRET_KEY")
+    cashfree_env: str = Field(default="sandbox", validation_alias="CASHFREE_ENV")
+    cashfree_plan_id: Optional[str] = Field(default=None, validation_alias="CASHFREE_PLAN_ID")
+    cashfree_return_url: Optional[str] = Field(default=None, validation_alias="CASHFREE_RETURN_URL")
     sales_assets_bucket: Optional[str] = Field(default="sales-assets", validation_alias="SALES_ASSETS_BUCKET")
     bypass_ssl: bool = Field(default=False, validation_alias="BYPASS_SSL")
     api_rate_limit_per_minute: int = Field(default=120, validation_alias="API_RATE_LIMIT_PER_MINUTE")
     auth_rate_limit_per_minute: int = Field(default=30, validation_alias="AUTH_RATE_LIMIT_PER_MINUTE")
+    webhook_rate_limit_per_minute: int = Field(default=60, validation_alias="WEBHOOK_RATE_LIMIT_PER_MINUTE")
     auth_attempt_limit_per_15min: int = Field(default=8, validation_alias="AUTH_ATTEMPT_LIMIT_PER_15MIN")
     send_limit_per_hour: int = Field(default=30, validation_alias="SEND_LIMIT_PER_HOUR")
     send_limit_per_day: int = Field(default=200, validation_alias="SEND_LIMIT_PER_DAY")
@@ -53,6 +54,12 @@ class Settings(BaseSettings):
     @property
     def state_signing_secret(self) -> str:
         return self.app_secret_key or self.supabase_service_key
+
+    @property
+    def cashfree_base_url(self) -> str:
+        if self.cashfree_env == "production":
+            return "https://api.cashfree.com/pg"
+        return "https://sandbox.cashfree.com/pg"
 
 
 @lru_cache

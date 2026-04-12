@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { apiFetch, createPortalSession, getBusinessProfile, saveBusinessProfile, connectGmail, submitSupportRequest, syncGmail } from "@/lib/api";
+import { apiFetch, getBusinessProfile, saveBusinessProfile, connectGmail, submitSupportRequest, syncGmail } from "@/lib/api";
 import { getAgentMeta, isGmailAgent } from "@/lib/agents";
 import { SalesAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -164,6 +164,7 @@ export function SettingsClient({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [salesAssets, setSalesAssets] = useState<SalesAsset[]>([]);
   const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailSyncing, setGmailSyncing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -323,13 +324,26 @@ export function SettingsClient({
     setGmailConnected(false);
   }
 
-  async function handleManageBilling() {
-    try {
-      await createPortalSession();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not open billing portal.";
-      pushToast(message, "error");
+  async function handleGmailSync() {
+    if (gmailSyncing) {
+      return;
     }
+
+    setGmailSyncing(true);
+    try {
+      await syncGmail(agentId);
+      pushToast("Gmail sync complete.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Gmail sync failed.";
+      pushToast(message, "error");
+    } finally {
+      setGmailSyncing(false);
+    }
+  }
+
+  function handleCancelSubscription() {
+    // Subscription management is handled via the Agents Hub
+    window.location.href = "/agents";
   }
 
   async function handleSupportSubmit() {
@@ -554,17 +568,30 @@ export function SettingsClient({
                       </div>
                     </div>
                     {gmailConnected ? (
-                      <div className="flex gap-4">
-                        <Button
-                          variant="ghost"
-                          className="rounded-xl font-bold text-brand-body/70 hover:text-brand-primary transition-colors"
-                          onClick={() => void syncGmail(agentId).then(() => pushToast("Manual sync triggered."))}
-                        >
-                          Force Sync
-                        </Button>
-                        <Button variant="outline" className="h-12 rounded-[1.25rem] border-red-100 text-red-600 font-black px-6 hover:bg-red-50" onClick={disconnectGmailAction}>
-                          Disconnect
-                        </Button>
+                      <div className="flex flex-col items-start gap-3">
+                        <div className="flex gap-4">
+                          <Button
+                            variant="ghost"
+                            className="rounded-xl font-bold text-brand-body/70 hover:text-brand-primary transition-colors"
+                            onClick={() => void handleGmailSync()}
+                            disabled={gmailSyncing}
+                          >
+                            {gmailSyncing ? "Syncing..." : "Force Sync"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="h-12 rounded-[1.25rem] border-red-100 text-red-600 font-black px-6 hover:bg-red-50"
+                            onClick={disconnectGmailAction}
+                            disabled={gmailSyncing}
+                          >
+                            Disconnect
+                          </Button>
+                        </div>
+                        {gmailSyncing ? (
+                          <p className="max-w-md rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+                            Gmail sync is running. Keep this page open and do not refresh until it finishes.
+                          </p>
+                        ) : null}
                       </div>
                     ) : (
                       <Button onClick={handleGmailConnect} className="h-14 rounded-[1.5rem] font-black px-10 shadow-2xl shadow-brand-primary/20 text-lg">
@@ -589,8 +616,8 @@ export function SettingsClient({
                     Billing and access are managed separately for this agent.
                   </p>
                 </div>
-                <Button variant="outline" className="rounded-full px-6 font-black" onClick={() => void handleManageBilling()}>
-                  Manage Billing
+                <Button variant="outline" className="rounded-full px-6 font-black" onClick={() => void handleCancelSubscription()}>
+                  Cancel Subscription
                 </Button>
               </div>
             </Card>

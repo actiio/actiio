@@ -278,7 +278,13 @@ def gmail_status(agent_id: str = Query(default="gmail_followup"), current_user=D
         .execute()
     )
     if not response.data:
-        return GmailStatusResponse(connected=False, status=None, email=None, display_name=None, last_synced_at=None)
+        return GmailStatusResponse(
+            connected=False,
+            status="not_connected",
+            email=None,
+            display_name=None,
+            last_synced_at=None,
+        )
     row = response.data[0]
     connection_status = row.get("status") or "connected"
     return GmailStatusResponse(

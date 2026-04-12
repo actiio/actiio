@@ -9,11 +9,9 @@ create table if not exists public.users (
   created_at timestamptz not null default now()
 );
 
--- Legacy cleanup if needed (done via separate migration steps in real life, but here we update the source of truth)
+-- Legacy cleanup
 ALTER TABLE public.users DROP COLUMN IF EXISTS subscription_status;
 ALTER TABLE public.users DROP COLUMN IF EXISTS stripe_customer_id;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS subscription_status text;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS stripe_customer_id text;
 
 -- =============================================
 -- Agents catalog
@@ -23,10 +21,7 @@ CREATE TABLE IF NOT EXISTS public.agents (
   name text not null,
   description text not null,
   icon text not null,
-  free_price_inr integer not null default 99,
-  pro_price_inr integer not null default 499,
-  stripe_free_price_id text,
-  stripe_pro_price_id text,
+  price_inr integer not null default 499,
   channel text check (channel in ('gmail', 'any') or channel is null),
   status text not null default 'active'
     check (status in ('active', 'coming_soon')),
@@ -35,30 +30,37 @@ CREATE TABLE IF NOT EXISTS public.agents (
 );
 
 ALTER TABLE public.agents
+  ADD COLUMN IF NOT EXISTS price_inr integer not null default 499;
+
+ALTER TABLE public.agents
   ADD COLUMN IF NOT EXISTS channel text
   check (channel in ('gmail', 'any') or channel is null);
 
+ALTER TABLE public.agents DROP COLUMN IF EXISTS free_price_inr;
+ALTER TABLE public.agents DROP COLUMN IF EXISTS pro_price_inr;
+ALTER TABLE public.agents DROP COLUMN IF EXISTS stripe_free_price_id;
+ALTER TABLE public.agents DROP COLUMN IF EXISTS stripe_pro_price_id;
+
 INSERT INTO public.agents
-  (id, name, description, icon, free_price_inr, pro_price_inr, status, sort_order)
+  (id, name, description, icon, price_inr, status, sort_order)
 VALUES
   ('gmail_followup', 'Gmail Follow-up Agent',
    'Monitors your Gmail inbox for silent sales leads and generates smart follow-up drafts automatically. Never lose a warm lead again.',
-   '📧', 99, 499, 'active', 1),
+   '📧', 499, 'active', 1),
   ('lead_scorer', 'Lead Scorer Agent',
    'Automatically scores and prioritizes inbound leads so you focus on the ones most likely to close.',
-   '🎯', 99, 499, 'coming_soon', 2),
+   '🎯', 499, 'coming_soon', 2),
   ('cold_outreach', 'Cold Outreach Agent',
    'Researches prospects and generates personalized cold outreach that gets replies.',
-   '📨', 99, 499, 'coming_soon', 3),
+   '📨', 499, 'coming_soon', 3),
   ('proposal_generator', 'Proposal Generator',
    'Turns meeting notes into polished proposals ready to send in minutes.',
-   '📄', 99, 499, 'coming_soon', 4)
+   '📄', 499, 'coming_soon', 4)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
   icon = EXCLUDED.icon,
-  free_price_inr = EXCLUDED.free_price_inr,
-  pro_price_inr = EXCLUDED.pro_price_inr,
+  price_inr = EXCLUDED.price_inr,
   status = EXCLUDED.status,
   sort_order = EXCLUDED.sort_order;
 
@@ -287,25 +289,25 @@ ALTER TABLE public.business_profiles
 -- Per-agent user subscriptions
 -- =============================================
 CREATE TABLE IF NOT EXISTS public.user_subscriptions (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id)
-    on delete cascade,
-  agent_id text not null references public.agents(id),
-  stripe_subscription_id text,
-  stripe_customer_id text,
-  plan text not null default 'free'
-    check (plan in ('free', 'pro')),
-  status text not null default 'inactive'
-    check (status in ('active', 'inactive',
-                      'past_due', 'canceled')),
-  current_period_end timestamptz,
-  created_at timestamptz not null default now(),
-  unique(user_id, agent_id)
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES public.users(id) NOT NULL,
+  agent_id text NOT NULL,
+  status text DEFAULT 'inactive' NOT NULL,
+  current_period_start timestamp with time zone,
+  current_period_end timestamp with time zone,
+  cashfree_order_id text,
+  cashfree_payment_id text,
+  cashfree_transaction_id text,        -- bank/gateway reference from webhook
+  autopay_enabled boolean DEFAULT false,
+  cashfree_subscription_id text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  UNIQUE(user_id, agent_id)
 );
 
-UPDATE public.user_subscriptions
-  SET agent_id = 'gmail_followup'
-  WHERE agent_id IN ('actiio', 'follow_up');
+-- Migration: add transaction ID column to existing databases
+ALTER TABLE public.user_subscriptions
+  ADD COLUMN IF NOT EXISTS cashfree_transaction_id text;
 
 UPDATE public.agents
   SET channel = 'gmail'

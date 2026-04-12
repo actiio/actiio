@@ -24,7 +24,7 @@ Actiio is an AI-powered lead follow-up agent. This repository contains a monorep
 - Gmail test script (`backend/tests/test_gmail.py`)
 - Frontend onboarding flow (`/onboarding`) and dashboard draft approval modal
 - Settings page (`/settings`) with business profile + Gmail connection status
-- Stripe checkout + webhook + billing portal routes
+- Cashfree subscription creation + webhook + cancellation routes
 - Subscription gating for threads/sync/send operations
 
 See [docs/SETUP.md](/Users/jishma/follow-up-agent/docs/SETUP.md) for local setup.

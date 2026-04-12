@@ -21,9 +21,11 @@
    - `GOOGLE_CLIENT_SECRET`
    - `GOOGLE_REDIRECT_URI`
    - `GOOGLE_PUBSUB_TOPIC`
-   - `STRIPE_SECRET_KEY`
-   - `STRIPE_WEBHOOK_SECRET`
-   - `STRIPE_PRICE_ID`
+   - `CASHFREE_APP_ID`
+   - `CASHFREE_SECRET_KEY`
+   - `CASHFREE_ENV`
+   - `CASHFREE_PLAN_ID`
+   - `CASHFREE_RETURN_URL`
 5. Run web service:
    `uvicorn main:app --host 0.0.0.0 --port 8000 --reload`
 6. Health check:
@@ -108,3 +110,14 @@ Use two services from the same backend repo:
 2. In **Supabase Dashboard → Authentication → URL Configuration**, add your URLs to allowed redirect URLs:
    - Development: `http://localhost:3000/reset-password`
    - Production: `https://actiio.co/reset-password`
+
+## 10. Cashfree Plan Setup
+
+1. Create a reusable subscription/autopay plan in Cashfree Dashboard.
+2. Set the plan type to `ON_DEMAND` with max amount `₹499`.
+3. Copy the plan ID from Cashfree.
+4. Add `CASHFREE_PLAN_ID=<your_plan_id>` to backend env.
+5. Each autopay mandate will reference this shared Cashfree plan ID; the backend raises ₹499 charges against the authorized mandate.
+6. Set `CASHFREE_RETURN_URL=http://localhost:3000/agents` in development.
+7. Register `POST https://your-backend-domain/api/payment/webhook` for both payment order events and subscription events.
+8. Enable subscription webhook events: `SUBSCRIPTION_STATUS_CHANGED`, `SUBSCRIPTION_AUTH_STATUS`, `SUBSCRIPTION_PAYMENT_SUCCESS`, `SUBSCRIPTION_PAYMENT_FAILED`, and `SUBSCRIPTION_PAYMENT_CANCELLED`.

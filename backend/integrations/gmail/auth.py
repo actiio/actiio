@@ -147,22 +147,21 @@ def handle_callback(code: str, user_id: str, agent_id: str = "gmail_followup") -
         .execute()
     )
 
+    connection_payload = {
+        "user_id": user_id,
+        "agent_id": agent_id,
+        "email": normalized_email,
+        "display_name": display_name,
+        "access_token": credentials.token,
+        "refresh_token": credentials.refresh_token,
+        "token_expiry": token_expiry,
+        "is_active": True,
+        "status": "connected",
+    }
+
     response = (
         supabase.table("gmail_connections")
-        .upsert(
-            {
-                "user_id": user_id,
-                "agent_id": agent_id,
-                "email": normalized_email,
-                "display_name": display_name,
-                "access_token": credentials.token,
-                "refresh_token": credentials.refresh_token,
-                "token_expiry": token_expiry,
-                "is_active": True,
-                "status": "connected",
-            },
-            on_conflict="user_id,agent_id,email",
-        )
+        .upsert(connection_payload, on_conflict="user_id,agent_id,email")
         .execute()
     )
 

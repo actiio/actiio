@@ -19,15 +19,71 @@ def _requires_gmail(agent_id: str, channel: str | None) -> bool:
     return channel == "gmail" or agent_id == "gmail_followup"
 
 
+def _is_missing_gmail_status_error(exc: Exception) -> bool:
+    message = str(exc)
+    return "gmail_connections.status" in message and "42703" in message
+
+
+def _is_missing_gmail_account_email_error(exc: Exception) -> bool:
+    message = str(exc)
+    return "lead_threads.gmail_account_email" in message and "42703" in message
+
+
+def _active_gmail_connection_query(user_id: str, agent_id: str | None = None, include_status: bool = True):
+    columns = "agent_id,email,status" if include_status else "agent_id,email"
+    query = (
+        supabase.table("gmail_connections")
+        .select(columns)
+        .eq("user_id", user_id)
+        .eq("is_active", True)
+    )
+    if agent_id:
+        query = query.eq("agent_id", agent_id)
+    if include_status:
+        query = query.eq("status", "connected")
+    return query
+
+
+def _active_gmail_connections(user_id: str) -> list[dict]:
+    try:
+        response = _active_gmail_connection_query(user_id).execute()
+    except Exception as exc:
+        if not _is_missing_gmail_status_error(exc):
+            return []
+        try:
+            response = _active_gmail_connection_query(user_id, include_status=False).execute()
+        except Exception:
+            return []
+    return response.data or []
+
+
+def _active_gmail_connection_for_agent(user_id: str, agent_id: str) -> dict:
+    try:
+        response = _active_gmail_connection_query(user_id, agent_id=agent_id).limit(1).execute()
+    except Exception as exc:
+        if not _is_missing_gmail_status_error(exc):
+            return {}
+        try:
+            response = (
+                _active_gmail_connection_query(user_id, agent_id=agent_id, include_status=False)
+                .limit(1)
+                .execute()
+            )
+        except Exception:
+            return {}
+    return response.data[0] if response.data else {}
+
+
 def _safe_agent_id_set(table_name: str, user_id: str) -> set[str]:
+    if table_name == "gmail_connections":
+        return {row["agent_id"] for row in _active_gmail_connections(user_id) if row.get("agent_id")}
+
     try:
         query = (
             supabase.table(table_name)
             .select("agent_id")
             .eq("user_id", user_id)
         )
-        if table_name == "gmail_connections":
-            query = query.eq("is_active", True).eq("status", "connected")
         response = query.execute()
     except Exception:
         return set()
@@ -142,25 +198,17 @@ def _is_waiting_on_lead(thread: dict) -> bool:
 
 def _thread_counts_for_agent(user_id: str, agent_id: str) -> dict[str, int | str | None]:
     # Fetch all threads for this user and agent in ONE query instead of multiple count calls
-    query = (
+    base_query = (
         supabase.table("lead_threads")
         .select("id,status,last_inbound_at,last_outbound_at")
         .eq("user_id", user_id)
         .eq("agent_id", agent_id)
     )
+    query = base_query
     if _requires_gmail(agent_id, None):
-        connection = (
-            supabase.table("gmail_connections")
-            .select("email,status")
-            .eq("user_id", user_id)
-            .eq("agent_id", agent_id)
-            .eq("is_active", True)
-            .limit(1)
-            .execute()
-        )
-        row = connection.data[0] if connection.data else {}
+        row = _active_gmail_connection_for_agent(user_id, agent_id)
         gmail_email = (row.get("email") or "").strip().lower()
-        if not gmail_email or row.get("status") == "disconnected":
+        if not gmail_email:
             return {
                 "needs_attention": 0,
                 "active_leads": 0,
@@ -168,7 +216,12 @@ def _thread_counts_for_agent(user_id: str, agent_id: str) -> dict[str, int | str
                 "last_synced": _last_synced_for_agent(user_id, agent_id),
             }
         query = query.eq("gmail_account_email", gmail_email)
-    resp = query.execute()
+    try:
+        resp = query.execute()
+    except Exception as exc:
+        if not _is_missing_gmail_account_email_error(exc):
+            raise
+        resp = base_query.execute()
     threads = resp.data or []
     visible_threads = [thread for thread in threads if thread.get("status") != "ignored"]
 
@@ -209,34 +262,12 @@ def get_agents(current_user=Depends(get_current_user)):
     waitlisted_agents = _safe_agent_id_set("agent_waitlist", current_user.id)
     profile_agents = _safe_agent_id_set("business_profiles", current_user.id)
 
-    # Pre-fetch legacy user subscription (so we don't query it inside the loop)
-    legacy_user_resp = (
-        supabase.table("users")
-        .select("subscription_status")
-        .eq("id", current_user.id)
-        .limit(1)
-        .execute()
-    )
-    legacy_sub_active = legacy_user_resp.data and legacy_user_resp.data[0].get("subscription_status") == "active"
-
     # Pre-fetch gmail connections in one go
     gmail_connections = _safe_agent_id_set("gmail_connections", current_user.id)
 
     result = []
     for agent in agents:
         sub = subs_by_agent.get(agent["id"])
-
-        # Fallback to legacy status if no active subscription row is found for gmail_followup
-        if (not sub or sub.get("status") != "active") and agent["id"] == "gmail_followup":
-            if legacy_sub_active:
-                # Create a virtual active subscription for the UI/API checks
-                sub = {
-                    "id": f"legacy_{current_user.id}",
-                    "user_id": current_user.id,
-                    "agent_id": agent["id"],
-                    "status": "active",
-                    "plan": "pro"
-                }
 
         has_profile = agent["id"] in profile_agents
         requires_gmail = _requires_gmail(agent["id"], agent.get("channel"))
@@ -249,6 +280,11 @@ def get_agents(current_user=Depends(get_current_user)):
                 legacy_ids = _legacy_agent_ids(agent["id"])
                 if any(lid in gmail_connections for lid in legacy_ids):
                     has_gmail = True
+        should_include_thread_summary = (
+            sub
+            and sub.get("status") == "active"
+            and (has_gmail or not requires_gmail)
+        )
 
         result.append({
             "agent": agent,
@@ -257,7 +293,7 @@ def get_agents(current_user=Depends(get_current_user)):
             "business_profile_configured": has_profile,
             "gmail_connected": has_gmail,
             "setup_complete": has_profile and (has_gmail or not requires_gmail),
-            "thread_summary": _thread_counts_for_agent(current_user.id, agent["id"]) if sub and sub.get("status") == "active" else None,
+            "thread_summary": _thread_counts_for_agent(current_user.id, agent["id"]) if should_include_thread_summary else None,
         })
 
     return result

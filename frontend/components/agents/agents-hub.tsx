@@ -2,18 +2,30 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { SignOutButton } from "@/components/sign-out-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import { apiFetch, createCheckoutSession, createPortalSession, getAgents, joinWaitlist } from "@/lib/api";
-import { AgentWithSubscription } from "@/lib/types";
+import {
+  apiFetch,
+  createAutopaySubscription,
+  createPaymentOrder,
+  getAgents,
+  getSubscriptionStatus,
+  joinWaitlist,
+  renewSubscription,
+} from "@/lib/api";
+import { AgentWithSubscription, SubscriptionStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SuggestSkillModal } from "./suggest-skill-modal";
 import { Sparkles } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function greetingForHour(hour: number) {
   if (hour >= 5 && hour < 12) return "Good morning";
@@ -34,6 +46,27 @@ function formatSyncTimestamp(timestamp: string | null) {
   });
 }
 
+function formatExpiryDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function getCashfreeMode(): "sandbox" | "production" {
+  return process.env.NEXT_PUBLIC_CASHFREE_ENV === "production"
+    ? "production"
+    : "sandbox";
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton
+// ---------------------------------------------------------------------------
+
 function SkeletonCard() {
   return (
     <Card className="rounded-2xl border border-gray-100 p-6 animate-pulse">
@@ -53,6 +86,10 @@ function SkeletonCard() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function AgentsHub() {
   const { pushToast } = useToast();
   const searchParams = useSearchParams();
@@ -60,11 +97,31 @@ export function AgentsHub() {
   const [agents, setAgents] = useState<AgentWithSubscription[]>([]);
   const [joiningWaitlistIds, setJoiningWaitlistIds] = useState<string[]>([]);
 
+  // Subscription state — keyed by agent id
+  const [subStatus, setSubStatus] = useState<Record<string, SubscriptionStatus>>({});
+  const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ------- data loading -------
+  const fetchSubStatus = useCallback(
+    async (agentId: string) => {
+      try {
+        const status = await getSubscriptionStatus(agentId);
+        setSubStatus((prev) => ({ ...prev, [agentId]: status }));
+        return status;
+      } catch {
+        // Non-critical — sub status card will just not show
+        return null;
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     async function init() {
       setLoading(true);
       try {
-        const [meResult, agentsResult] = await Promise.allSettled([
+        const [, agentsResult] = await Promise.allSettled([
           apiFetch<{ id: string; email?: string }>("/api/auth/me"),
           getAgents(),
         ]);
@@ -75,6 +132,12 @@ export function AgentsHub() {
 
         const agentData = agentsResult.value;
         setAgents(agentData);
+
+        // Fetch subscription status for active agents
+        const activeAgentIds = agentData
+          .filter((a) => a.agent.status === "active")
+          .map((a) => a.agent.id);
+        await Promise.allSettled(activeAgentIds.map(fetchSubStatus));
       } catch {
         pushToast("Failed to load agents hub.");
       } finally {
@@ -83,7 +146,7 @@ export function AgentsHub() {
     }
 
     void init();
-  }, [pushToast]);
+  }, [pushToast, fetchSubStatus]);
 
   useEffect(() => {
     if (searchParams.get("subscribed") === "true") {
@@ -91,30 +154,182 @@ export function AgentsHub() {
     }
   }, [pushToast, searchParams]);
 
+  // Cleanup poll timer on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, []);
+
   const greeting = useMemo(() => {
     return `${greetingForHour(new Date().getHours())}.`;
   }, []);
 
-  const subscribedAgents = useMemo(
-    () => agents.filter((item) => item.subscription && ["active", "past_due", "inactive"].includes(item.subscription.status)),
-    [agents]
-  );
+  const subscribedAgents = useMemo(() => {
+    return agents.filter((item) => {
+      const sub = subStatus[item.agent.id];
+      if (!sub) return false;
+      return sub.status === "active" || sub.status === "payment_pending";
+    });
+  }, [agents, subStatus]);
 
-  const discoverAgents = useMemo(
-    () => agents.filter((item) => !item.subscription || item.subscription.status === "canceled"),
-    [agents]
-  );
+  const discoverAgents = useMemo(() => {
+    return agents.filter((item) => {
+      const sub = subStatus[item.agent.id];
+      const isSubscribed = sub && (sub.status === "active" || sub.status === "payment_pending");
+      return !isSubscribed;
+    });
+  }, [agents, subStatus]);
 
-  const activeAgents = useMemo(
-    () => subscribedAgents.filter((item) => item.subscription?.status === "active"),
-    [subscribedAgents]
-  );
+  // ------- payment flow -------
+  async function openCashfreeCheckout(paymentSessionId: string): Promise<void> {
+    if (!window.Cashfree) {
+      throw new Error("Payment SDK not loaded. Please refresh and try again.");
+    }
+    const cashfree = window.Cashfree({ mode: getCashfreeMode() });
+    const result = await cashfree.checkout({
+      paymentSessionId,
+      redirectTarget: "_modal",
+    });
+    if (result?.error?.message) {
+      throw new Error(result.error.message);
+    }
+  }
+
+  async function openCashfreeAutopayCheckout(subscriptionSessionId: string): Promise<void> {
+    if (!window.Cashfree) {
+      throw new Error("Payment SDK not loaded. Please refresh and try again.");
+    }
+    const cashfree = window.Cashfree({ mode: getCashfreeMode() });
+    const result = await cashfree.subscriptionsCheckout({
+      subsSessionId: subscriptionSessionId,
+      redirectTarget: "_self",
+    });
+    if (result?.error?.message) {
+      throw new Error(result.error.message);
+    }
+  }
+
+  async function pollUntilActive(agentId: string) {
+    const maxAttempts = 10;
+    let attempt = 0;
+
+    function doPoll() {
+      attempt += 1;
+      if (attempt > maxAttempts) {
+        pushToast("Payment processing… refresh in a moment.");
+        return;
+      }
+      pollTimerRef.current = setTimeout(async () => {
+        const status = await fetchSubStatus(agentId);
+        if (status?.status === "active") {
+          pushToast("Subscription activated! 🎉");
+          // Also refresh agents list for setup states
+          try {
+            const data = await getAgents();
+            setAgents(data);
+          } catch { /* best-effort */ }
+          return;
+        }
+        doPoll();
+      }, 3000);
+    }
+
+    doPoll();
+  }
+
+  async function handleSubscribe(agentId: string) {
+    setPaymentLoading(agentId);
+    try {
+      const resp = await createAutopaySubscription(agentId);
+      if (resp.status === "already_enabled") {
+        pushToast("Autopay is already enabled.");
+        await fetchSubStatus(agentId);
+        return;
+      }
+      if (!resp.subscription_session_id) {
+        throw new Error("No autopay session returned.");
+      }
+      await openCashfreeAutopayCheckout(resp.subscription_session_id);
+      void pollUntilActive(agentId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not start autopay.";
+      pushToast(message, "error");
+    } finally {
+      setPaymentLoading(null);
+    }
+  }
+
+  async function handleManualSubscribe(agentId: string) {
+    setPaymentLoading(agentId);
+    try {
+      const resp = await createPaymentOrder(agentId);
+      if (!resp.payment_session_id) {
+        throw new Error("No payment session returned.");
+      }
+      await openCashfreeCheckout(resp.payment_session_id);
+      void pollUntilActive(agentId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not start payment.";
+      pushToast(message, "error");
+    } finally {
+      setPaymentLoading(null);
+    }
+  }
+
+  async function handleRenew(agentId: string) {
+    setPaymentLoading(agentId);
+    try {
+      const resp = await renewSubscription(agentId);
+      if (!resp.payment_session_id) {
+        throw new Error("No payment session returned.");
+      }
+      await openCashfreeCheckout(resp.payment_session_id);
+      void pollUntilActive(agentId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not process renewal.";
+      pushToast(message, "error");
+    } finally {
+      setPaymentLoading(null);
+    }
+  }
+
+  async function handleAutopay(agentId: string) {
+    setPaymentLoading(agentId);
+    try {
+      const resp = await createAutopaySubscription(agentId);
+      if (resp.status === "already_enabled") {
+        pushToast("Autopay is already enabled.");
+        await fetchSubStatus(agentId);
+        return;
+      }
+      if (!resp.subscription_session_id) {
+        throw new Error("No autopay session returned.");
+      }
+      await openCashfreeAutopayCheckout(resp.subscription_session_id);
+      pushToast("Autopay authorization submitted. We’ll update this once Cashfree confirms it.");
+      await fetchSubStatus(agentId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not set up autopay.";
+      pushToast(message, "error");
+    } finally {
+      setPaymentLoading(null);
+    }
+  }
 
   async function handleWaitlist(agentId: string) {
     setJoiningWaitlistIds((prev) => [...prev, agentId]);
     try {
       await joinWaitlist(agentId);
-      setAgents((prev) => prev.map((item) => (item.agent.id === agentId ? { ...item, on_waitlist: true } : item)));
+      setAgents((prev) =>
+        prev.map((item) =>
+          item.agent.id === agentId ? { ...item, on_waitlist: true } : item
+        )
+      );
     } catch {
       pushToast("Could not join waitlist.");
     } finally {
@@ -122,23 +337,22 @@ export function AgentsHub() {
     }
   }
 
-  async function handleCheckout(agentId: string, plan: "free" | "pro" = "free") {
-    try {
-      await createCheckoutSession(agentId, plan);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not start checkout.";
-      pushToast(message, "error");
-    }
-  }
+  // ------- expiry warning -------
+  const expiringAgents = useMemo(() => {
+    return Object.entries(subStatus)
+      .filter(
+        ([, sub]) =>
+          sub.status === "active" &&
+          sub.days_remaining !== null &&
+          sub.days_remaining >= 1 &&
+          sub.days_remaining <= 5
+      )
+      .map(([agentId, sub]) => ({ agentId, daysRemaining: sub.days_remaining }));
+  }, [subStatus]);
 
-  async function handleManageBilling() {
-    try {
-      await createPortalSession();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not open billing portal.";
-      pushToast(message, "error");
-    }
-  }
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <div className="min-h-screen bg-[#f9fafb] lg:pl-64">
@@ -175,6 +389,28 @@ export function AgentsHub() {
 
       <main className="px-4 py-6 lg:px-8">
         <div className="mx-auto max-w-7xl space-y-8 lg:pt-4">
+          {/* Expiry warning banner */}
+          {expiringAgents.map(({ agentId, daysRemaining }) => (
+            <div
+              key={`expiry-${agentId}`}
+              className="flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4"
+            >
+              <p className="text-sm font-semibold text-amber-800">
+                ⚠️ Your subscription expires in {daysRemaining} day
+                {daysRemaining !== 1 ? "s" : ""}. Renew now to avoid
+                interruption.
+              </p>
+              <Button
+                size="sm"
+                className="shrink-0 rounded-full bg-amber-600 px-5 font-bold text-white hover:bg-amber-700"
+                disabled={paymentLoading === agentId}
+                onClick={() => void handleRenew(agentId)}
+              >
+                {paymentLoading === agentId ? "Processing…" : "Renew"}
+              </Button>
+            </div>
+          ))}
+
           <header className="space-y-3">
             <h1 className="text-[clamp(1.8rem,3vw,2.35rem)] font-black tracking-tight text-brand-heading">
               {greeting}
@@ -193,7 +429,7 @@ export function AgentsHub() {
               <h2 className="text-lg font-semibold text-gray-900">Welcome to Actiio</h2>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">
                 Subscribe to your first agent to start monitoring your leads automatically. The Gmail Follow-up Agent is
-                available for ₹99/month and gets you live coverage right away.
+                available for ₹499/month and gets you live coverage right away.
               </p>
             </Card>
           )}
@@ -210,11 +446,39 @@ export function AgentsHub() {
                 ) : (
                   subscribedAgents.map((item) => {
                     const agent = item.agent;
-                    const status = item.subscription?.status || "inactive";
-                    const needsSetup = status === "active" && agent.id === "gmail_followup" && !item.gmail_connected;
-                    const inactive = status === "inactive" || status === "past_due";
+                    const sub = subStatus[agent.id];
+                    const isActive = sub?.status === "active";
+                    const isPending = sub?.status === "payment_pending";
+                    const autopayPending = Boolean(sub?.cashfree_subscription_id && !sub.autopay_enabled);
+                    const needsSetup = isActive && agent.id === "gmail_followup" && !item.gmail_connected;
                     const metrics = item.thread_summary || null;
                     const needsAttention = (metrics?.needs_attention || 0) > 0;
+
+                    if (isPending) {
+                      return (
+                        <Card key={agent.id} className="rounded-2xl border border-gray-100 p-6 hover:shadow-md transition">
+                          <div className="flex items-start gap-3">
+                            <span className="text-3xl">{agent.icon}</span>
+                            <div>
+                              <h3 className="text-lg font-semibold text-gray-900">{agent.name}</h3>
+                              <p className="mt-1 text-sm font-medium text-amber-600">Payment pending</p>
+                            </div>
+                          </div>
+                          <p className="mt-5 text-sm leading-relaxed text-gray-600">
+                            Complete autopay authorization to activate this agent.
+                          </p>
+                          <div className="mt-6 flex justify-end">
+                            <Button
+                              className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90"
+                              disabled={paymentLoading === agent.id}
+                              onClick={() => void handleSubscribe(agent.id)}
+                            >
+                              {paymentLoading === agent.id ? "Processing…" : "Complete autopay"}
+                            </Button>
+                          </div>
+                        </Card>
+                      );
+                    }
 
                     if (needsSetup) {
                       return (
@@ -240,28 +504,7 @@ export function AgentsHub() {
                       );
                     }
 
-                    if (inactive) {
-                      return (
-                        <Card key={agent.id} className="rounded-2xl border border-gray-100 p-6 hover:shadow-md transition">
-                          <div className="flex items-start gap-3">
-                            <span className="text-3xl">{agent.icon}</span>
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{agent.name}</h3>
-                              <p className="mt-1 text-sm font-medium text-amber-600">Subscription inactive</p>
-                            </div>
-                          </div>
-                          <p className="mt-5 text-sm leading-relaxed text-gray-600">
-                            Renew your subscription to continue monitoring your leads.
-                          </p>
-                          <div className="mt-6 flex justify-end">
-                            <Button className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90" onClick={() => void handleManageBilling()}>
-                              Renew →
-                            </Button>
-                          </div>
-                        </Card>
-                      );
-                    }
-
+                    // Active agent card
                     return (
                       <Card
                         key={agent.id}
@@ -278,9 +521,43 @@ export function AgentsHub() {
                                 {agent.name}
                                 <span className={cn("h-2.5 w-2.5 rounded-full", needsAttention ? "bg-[#00bf63] animate-pulse" : "bg-gray-300")} />
                               </h3>
-                              <p className="mt-1 text-sm font-medium text-gray-600">Active</p>
+                              <p className="mt-1 text-sm font-medium text-gray-600">
+                                Active until {formatExpiryDate(sub?.current_period_end ?? null)}
+                              </p>
                             </div>
                           </div>
+                        </div>
+
+                        {/* Subscription info bar */}
+                        <div className="mt-4 flex items-center gap-3">
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                            {sub?.days_remaining ?? 0} days remaining
+                          </span>
+                          {sub && sub.days_remaining !== null && sub.days_remaining <= 5 && (
+                            <Button
+                              size="sm"
+                              className="rounded-full bg-brand-primary px-4 text-xs font-bold hover:bg-brand-primary/90"
+                              disabled={paymentLoading === agent.id}
+                              onClick={() => void handleRenew(agent.id)}
+                            >
+                              {paymentLoading === agent.id ? "Processing…" : "Renew — ₹499"}
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full px-4 text-xs font-bold"
+                            disabled={paymentLoading === agent.id || sub?.autopay_enabled || autopayPending}
+                            onClick={() => void handleAutopay(agent.id)}
+                          >
+                            {sub?.autopay_enabled
+                              ? "Autopay on"
+                              : autopayPending
+                              ? "Autopay pending"
+                              : paymentLoading === agent.id
+                              ? "Processing…"
+                              : "Set up autopay"}
+                          </Button>
                         </div>
 
                         <div className="mt-6 grid grid-cols-3 gap-3">
@@ -328,7 +605,17 @@ export function AgentsHub() {
               ) : (
                 discoverAgents.map((item) => {
                   const agent = item.agent;
+                  const sub = subStatus[agent.id];
                   const joining = joiningWaitlistIds.includes(agent.id);
+                  const isExpired = sub?.status === "expired";
+                  const isFailed = sub?.status === "payment_failed";
+                  const showSubscribe = agent.status === "active";
+                  const subscribeLabel = isExpired
+                    ? "Renew — ₹499"
+                    : isFailed
+                    ? "Retry autopay"
+                    : "Subscribe with autopay";
+
                   return (
                     <Card key={agent.id} className="rounded-2xl border border-gray-100 p-6 hover:shadow-md transition">
                       <div className="flex items-start gap-3">
@@ -336,16 +623,44 @@ export function AgentsHub() {
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900">{agent.name}</h3>
                           <p className="mt-1 text-sm font-medium text-gray-600">
-                            {agent.status === "active" ? `Available now · ₹${agent.free_price_inr}/month` : "Coming soon"}
+                            {agent.status === "active"
+                              ? isExpired
+                                ? "Subscription expired"
+                                : isFailed
+                                ? "Payment failed"
+                                : `₹${agent.price_inr}/month`
+                              : "Coming soon"}
                           </p>
                         </div>
                       </div>
                       <p className="mt-5 text-sm leading-relaxed text-gray-600">{agent.description}</p>
-                      <div className="mt-6 flex justify-end">
-                        {agent.status === "active" ? (
-                          <Button className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90" onClick={() => void handleCheckout(agent.id, "free")}>
-                            Subscribe →
-                          </Button>
+                      <div className="mt-6 flex flex-wrap justify-end gap-2">
+                        {showSubscribe ? (
+                          <>
+                            {!isExpired && (
+                              <Button
+                                variant="outline"
+                                className="rounded-full px-5 font-bold"
+                                disabled={paymentLoading === agent.id}
+                                onClick={() => void handleManualSubscribe(agent.id)}
+                              >
+                                Pay once
+                              </Button>
+                            )}
+                            <Button
+                              className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90"
+                              disabled={paymentLoading === agent.id}
+                              onClick={() =>
+                                isExpired
+                                  ? void handleRenew(agent.id)
+                                  : void handleSubscribe(agent.id)
+                              }
+                            >
+                              {paymentLoading === agent.id
+                                ? "Processing…"
+                                : subscribeLabel}
+                            </Button>
+                          </>
                         ) : (
                           <Button
                             variant={item.on_waitlist ? "outline" : "default"}

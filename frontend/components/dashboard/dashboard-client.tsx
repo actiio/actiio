@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
-import { apiFetch, connectGmail, createCheckoutSession, getAgents, getThreads, syncGmail, ignoreThread } from "@/lib/api";
+import { apiFetch, connectGmail, createAutopaySubscription, getAgents, getThreads, syncGmail, ignoreThread } from "@/lib/api";
 import { getAgentMeta, isGmailAgent } from "@/lib/agents";
 import { supabase } from "@/lib/supabase";
 import { LeadThread, ThreadDrafts } from "@/lib/types";
@@ -589,9 +589,27 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
 
   async function handleActivateAgent() {
     try {
-      await createCheckoutSession(agentId);
+      const resp = await createAutopaySubscription(agentId);
+      if (resp.status === "already_enabled") {
+        pushToast("Autopay is already enabled.");
+        return;
+      }
+      if (!resp.subscription_session_id) {
+        pushToast("Autopay session not available.", "error");
+        return;
+      }
+      const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_ENV === "production" ? "production" : "sandbox" as const;
+      if (!window.Cashfree) {
+        pushToast("Payment SDK not loaded. Please refresh.", "error");
+        return;
+      }
+      const cashfree = window.Cashfree({ mode: cashfreeMode });
+      await cashfree.subscriptionsCheckout({
+        subsSessionId: resp.subscription_session_id,
+        redirectTarget: "_self",
+      });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not start checkout.";
+      const message = error instanceof Error ? error.message : "Could not start autopay.";
       pushToast(message, "error");
     }
   }
@@ -692,6 +710,11 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
                 </svg> */}
                 {isSyncing ? "Syncing..." : "Sync Gmail"}
               </Button>
+              {isSyncing ? (
+                <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
+                  Gmail sync is running. Keep this page open and do not refresh until it finishes.
+                </p>
+              ) : null}
             </div>
           )}
         </header>
