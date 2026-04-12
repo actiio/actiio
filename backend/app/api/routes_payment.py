@@ -226,6 +226,26 @@ async def _sync_autopay_authorization_from_cashfree(row: dict[str, Any]) -> dict
         )
         return {**row, **updated}
 
+    # Cleanup: If the local status is "payment_pending" because of an autopay setup, 
+    # but the setup was cancelled or never finished (and there's no active payment order),
+    # reset the status so the user is not stuck on the "Pending" card.
+    if (
+        row.get("status") == "payment_pending" 
+        and not row.get("cashfree_order_id") 
+        and subscription_status in ("INITIALIZED", "LINK_EXPIRED", "CANCELLED")
+    ):
+        updated = {
+            "status": "expired", # Fallback to expired if it's not a fresh subscription
+            "updated_at": _now_utc().isoformat(),
+        }
+        (
+            supabase.table("user_subscriptions")
+            .update(updated)
+            .eq("id", row["id"])
+            .execute()
+        )
+        return {**row, **updated}
+
     return row
 
 
@@ -464,8 +484,9 @@ async def create_autopay_subscription(
             status_code=502, detail="Payment provider did not return an autopay session."
         )
 
-    current_status = row.get("status") if row else None
-    next_status = "active" if current_status == "active" else "payment_pending"
+    # Only switch to payment_pending if the subscription is not already established (active or expired).
+    # This prevents the UI from flipping to a "Pending" card if the user just initiates autopay setup but cancels.
+    next_status = current_status if current_status in ("active", "expired") else "payment_pending"
     (
         supabase.table("user_subscriptions")
         .upsert(
