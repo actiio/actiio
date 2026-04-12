@@ -220,6 +220,7 @@ async def _sync_autopay_authorization_from_cashfree(row: dict[str, Any]) -> dict
     if subscription_status == "ACTIVE" or auth_status in ("ACTIVE", "SUCCESS"):
         updated = {
             "autopay_enabled": True,
+            "status": "active", # Ensure status flips to active upon successful autopay authorization
             "updated_at": _now_utc().isoformat(),
         }
         (
@@ -230,20 +231,21 @@ async def _sync_autopay_authorization_from_cashfree(row: dict[str, Any]) -> dict
         )
         return {**row, **updated}
 
-    # Cleanup: If the local status is "payment_pending" because of an autopay setup, 
-    # but the setup was cancelled or never finished (and there's no active payment order),
-    # reset the status so the user is not stuck on the "Pending" card.
-    # We broaden this to any non-active status if it has been pending for a bit.
+    # Cleanup: If the setup was cancelled or never finished, clear the pending ID.
     if (
-        row.get("status") == "payment_pending" 
-        and not row.get("cashfree_order_id") 
+        not row.get("autopay_enabled")
+        and subscription_id
         and subscription_status in ("INITIALIZED", "LINK_EXPIRED", "CANCELLED", "PENDING", "DEACTIVATED")
     ):
-        logger.info("Cleaning up stuck autopay setup for %s", subscription_id)
+        logger.info("Clearing abandoned autopay setup for %s", subscription_id)
         updated = {
-            "status": "expired", # Fallback to expired
+            "cashfree_subscription_id": None, # Clear the ID so UI reverts to "Set up autopay"
             "updated_at": _now_utc().isoformat(),
         }
+        # If it was also holding the status in pending, reset it
+        if row.get("status") == "payment_pending" and not row.get("cashfree_order_id"):
+            updated["status"] = "expired"
+            
         (
             supabase.table("user_subscriptions")
             .update(updated)
@@ -706,7 +708,9 @@ async def _handle_subscription_webhook(event_type: str, data: dict[str, Any]) ->
             "cashfree_transaction_id": str(data.get("cf_txn_id") or ""),
             "updated_at": now.isoformat(),
         }
-        if not auth_ok and row.get("status") != "active":
+        if auth_ok:
+            update_data["status"] = "active"
+        elif row.get("status") != "active":
             update_data["status"] = "payment_failed"
         (
             supabase.table("user_subscriptions")
