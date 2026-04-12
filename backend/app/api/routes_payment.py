@@ -484,6 +484,7 @@ async def create_autopay_subscription(
             status_code=502, detail="Payment provider did not return an autopay session."
         )
 
+    current_status = row.get("status") if row else None
     # Only switch to payment_pending if the subscription is not already established (active or expired).
     # This prevents the UI from flipping to a "Pending" card if the user just initiates autopay setup but cancels.
     next_status = current_status if current_status in ("active", "expired") else "payment_pending"
