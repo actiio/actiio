@@ -92,22 +92,26 @@ def _resolve_agent_id_from_payload(payload: dict[str, Any] | None) -> str:
 
 
 def _get_current_gmail_account_email(user_id: str, agent_id: str) -> str | None:
-    response = (
-        supabase.table("gmail_connections")
-        .select("email,status")
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .eq("is_active", True)
-        .limit(1)
-        .execute()
-    )
-    if not response.data:
+    try:
+        response = (
+            supabase.table("gmail_connections")
+            .select("email,status")
+            .eq("user_id", user_id)
+            .eq("agent_id", agent_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        if not response.data:
+            return None
+        row = response.data[0]
+        if row.get("status") == "disconnected":
+            return None
+        email = (row.get("email") or "").strip().lower()
+        return email or None
+    except Exception as exc:
+        logger.warning("Failed to fetch current gmail account email for user %s (%s): %s", user_id, agent_id, exc)
         return None
-    row = response.data[0]
-    if row.get("status") == "disconnected":
-        return None
-    email = (row.get("email") or "").strip().lower()
-    return email or None
 
 
 def _run_initial_sync_after_connect(user_id: str, agent_id: str) -> None:

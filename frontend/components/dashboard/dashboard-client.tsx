@@ -773,20 +773,22 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
           )}
         </header>
 
-        {gmailStatus === "disconnected" && (
+        {isGmailAgent(agentId) && gmailStatus && gmailStatus !== "connected" && (
           <div className="mb-8 rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-amber-700">Gmail attention needed</p>
                 <p className="mt-2 text-base font-semibold text-amber-950">
-                  {"⚠️ Your Gmail connection was disconnected. Reconnect to resume tracking your leads."}
+                  {gmailStatus === "disconnected"
+                    ? "⚠️ Your Gmail connection was disconnected. Reconnect to resume tracking your leads."
+                    : "⚠️ Gmail not connected. Connect your account to start tracking leads."}
                 </p>
                 {gmailEmail && (
-                  <p className="mt-1 text-sm text-amber-800">Disconnected account: {gmailEmail}</p>
+                  <p className="mt-1 text-sm text-amber-800">Account: {gmailEmail}</p>
                 )}
               </div>
               <Button className="rounded-xl bg-amber-600 px-5 font-bold text-white hover:bg-amber-700" onClick={reconnectGmail}>
-                Reconnect Gmail
+                {gmailStatus === "disconnected" ? "Reconnect Gmail" : "Connect Gmail"}
               </Button>
             </div>
           </div>

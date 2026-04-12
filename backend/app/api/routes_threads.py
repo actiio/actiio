@@ -24,22 +24,26 @@ logger = logging.getLogger(__name__)
 
 
 def _get_current_gmail_account_email(user_id: str, agent_id: str) -> str | None:
-    response = (
-        supabase.table("gmail_connections")
-        .select("email,status")
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .eq("is_active", True)
-        .limit(1)
-        .execute()
-    )
-    if not response.data:
+    try:
+        response = (
+            supabase.table("gmail_connections")
+            .select("email,status")
+            .eq("user_id", user_id)
+            .eq("agent_id", agent_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        if not response.data:
+            return None
+        row = response.data[0]
+        if row.get("status") == "disconnected":
+            return None
+        email = (row.get("email") or "").strip().lower()
+        return email or None
+    except Exception as exc:
+        logger.warning("Failed to fetch current gmail account email for user %s (%s): %s", user_id, agent_id, exc)
         return None
-    row = response.data[0]
-    if row.get("status") == "disconnected":
-        return None
-    email = (row.get("email") or "").strip().lower()
-    return email or None
 
 
 def _stored_recent_messages(thread_id: str, limit: int = 2) -> list[dict[str, Any]]:

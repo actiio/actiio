@@ -99,15 +99,5 @@ async def require_active_subscription(request: Request, current_user=Depends(get
                     "message": f"Your subscription for {agent_id} has expired. Please renew to continue.",
                 },
             )
-    else:
-        # No period_end set — treat as invalid
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error": "subscription_required",
-                "agent_id": agent_id,
-                "message": f"Active subscription required for {agent_id} agent",
-            },
-        )
 
     return current_user
