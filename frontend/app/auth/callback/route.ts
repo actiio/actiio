@@ -7,8 +7,8 @@ import { safeRelativePath } from '@/lib/sanitize'
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  // By default, redirect to agents hub or dashboard after login
-  const next = safeRelativePath(searchParams.get('next'))
+  // Email confirmations should land on sign-in unless an explicit next path is provided.
+  const next = safeRelativePath(searchParams.get('next'), '/sign-in')
 
   if (code) {
     const cookieStore = await cookies()
