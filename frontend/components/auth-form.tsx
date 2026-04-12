@@ -97,7 +97,11 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
     }
 
     if (authError) {
-      setError(toFriendlyAuthError(authError.message));
+      if (!isSignIn && (authError.message.toLowerCase().includes("already registered") || authError.message.toLowerCase().includes("already exists"))) {
+        setError("An account with this email already exists.");
+      } else {
+        setError(toFriendlyAuthError(authError.message));
+      }
       setLoading(false);
       return;
     }
@@ -171,6 +175,13 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
         {error && (
           <div className={`p-4 rounded-xl text-sm ${error.includes("check your email") ? "bg-blue-50 text-blue-700 border border-blue-100" : "bg-red-50 text-red-600 border border-red-100"}`}>
             {error}
+            {error === "An account with this email already exists." && (
+              <div className="mt-2 text-xs font-bold uppercase tracking-wider">
+                <Link href="/sign-in" className="hover:underline">
+                  Sign in instead →
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
