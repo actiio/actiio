@@ -1,5 +1,11 @@
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
+
+import { SubscriptionsHandoff } from "./subscriptions-handoff";
 
 export default function SubscriptionsPage() {
-  redirect("/agents");
+  return (
+    <Suspense fallback={null}>
+      <SubscriptionsHandoff />
+    </Suspense>
+  );
 }

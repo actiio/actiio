@@ -7,6 +7,7 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlencode
 from uuid import uuid4
 
 import httpx
@@ -47,6 +48,19 @@ def _cashfree_headers(api_version: str = "2023-08-01") -> dict[str, str]:
 
 def _cashfree_url(path: str) -> str:
     return f"{settings.cashfree_base_url}{path}"
+
+
+def _cashfree_return_base_url() -> str:
+    configured = (settings.cashfree_return_url or "").strip().rstrip("/")
+    if configured:
+        return configured
+
+    frontend = (settings.frontend_url or "http://localhost:3000").strip().rstrip("/")
+    return f"{frontend}/subscriptions"
+
+
+def _cashfree_return_url(**params: str) -> str:
+    return f"{_cashfree_return_base_url()}?{urlencode(params)}"
 
 
 def _generate_order_id(user_id: str, agent_id: str) -> str:
@@ -283,8 +297,6 @@ async def create_order(
 
     # Build Cashfree order
     order_id = _generate_order_id(user_id, agent_id)
-    return_url = (settings.cashfree_return_url or "").rstrip("/")
-
     order_payload: dict[str, Any] = {
         "order_id": order_id,
         "order_amount": _ORDER_AMOUNT,
@@ -295,7 +307,7 @@ async def create_order(
             "customer_phone": "9999999999",
         },
         "order_meta": {
-            "return_url": f"{return_url}?order_id={order_id}&agent_id={agent_id}",
+            "return_url": _cashfree_return_url(order_id=order_id, agent_id=agent_id),
         },
     }
 
@@ -390,7 +402,6 @@ async def create_autopay_subscription(
 
     now = _now_utc()
     subscription_id = _generate_subscription_id(user_id, agent_id)
-    return_url = (settings.cashfree_return_url or "").rstrip("/")
     expiry_time = now + timedelta(days=3650)
 
     subscription_payload: dict[str, Any] = {
@@ -407,7 +418,11 @@ async def create_autopay_subscription(
             "authorization_amount_refund": True,
         },
         "subscription_meta": {
-            "return_url": f"{return_url}?subscription_id={subscription_id}&agent_id={agent_id}&autopay=true",
+            "return_url": _cashfree_return_url(
+                subscription_id=subscription_id,
+                agent_id=agent_id,
+                autopay="true",
+            ),
             "notification_channel": ["EMAIL", "SMS"],
         },
         "subscription_note": f"Actiio monthly autopay for {agent_id}",
@@ -896,8 +911,6 @@ async def renew_subscription(
 
     # Create new Cashfree order
     order_id = _generate_order_id(user_id, agent_id)
-    return_url = (settings.cashfree_return_url or "").rstrip("/")
-
     order_payload: dict[str, Any] = {
         "order_id": order_id,
         "order_amount": _ORDER_AMOUNT,
@@ -908,7 +921,7 @@ async def renew_subscription(
             "customer_phone": "9999999999",
         },
         "order_meta": {
-            "return_url": f"{return_url}?order_id={order_id}&agent_id={agent_id}",
+            "return_url": _cashfree_return_url(order_id=order_id, agent_id=agent_id),
         },
     }
 
