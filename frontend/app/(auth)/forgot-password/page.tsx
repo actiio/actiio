@@ -3,8 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { sanitizeEmail } from "@/lib/sanitize";
+
+const RESET_LINK_TIMEOUT_MS = 15000;
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -16,22 +17,38 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setLoading(true);
     setStatus("default");
+    setErrorMsg("");
     const safeEmail = sanitizeEmail(email);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), RESET_LINK_TIMEOUT_MS);
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/forgot-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: safeEmail }),
-    });
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: safeEmail }),
+        signal: controller.signal,
+      });
 
-    setLoading(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
+      window.clearTimeout(timeoutId);
+      setLoading(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setStatus("error");
+        setErrorMsg(data.detail || "Something went wrong. Try again.");
+      } else {
+        setEmail(safeEmail);
+        setStatus("success");
+      }
+    } catch (err: any) {
+      window.clearTimeout(timeoutId);
+      setLoading(false);
       setStatus("error");
-      setErrorMsg(data.detail || "Something went wrong. Try again.");
-    } else {
-      setEmail(safeEmail);
-      setStatus("success");
+      setErrorMsg(
+        err?.name === "AbortError"
+          ? "The reset request is taking too long. Please try again in a moment."
+          : "Network error. Please make sure the service is reachable."
+      );
     }
   }
 

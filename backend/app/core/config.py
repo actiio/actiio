@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     google_client_secret: Optional[str] = Field(default=None, validation_alias="GOOGLE_CLIENT_SECRET")
     google_redirect_uri: Optional[str] = Field(default=None, validation_alias="GOOGLE_REDIRECT_URI")
     frontend_url: Optional[str] = Field(default="http://localhost:3000", validation_alias="FRONTEND_URL")
+    email_logo_url: Optional[str] = Field(default=None, validation_alias="EMAIL_LOGO_URL")
     resend_api_key: Optional[str] = Field(default=None, validation_alias="RESEND_API_KEY")
     app_secret_key: Optional[str] = Field(default=None, validation_alias="APP_SECRET_KEY")
     cashfree_app_id: Optional[str] = Field(default=None, validation_alias="CASHFREE_APP_ID")
@@ -50,6 +51,19 @@ class Settings(BaseSettings):
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("FRONTEND_URL must be a valid http(s) origin.")
         return normalized.rstrip("/")
+
+    @field_validator("email_logo_url")
+    @classmethod
+    def validate_email_logo_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        normalized = value.strip()
+        if not normalized:
+            return None
+        parsed = urlparse(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("EMAIL_LOGO_URL must be a valid http(s) URL.")
+        return normalized
 
     @property
     def state_signing_secret(self) -> str:

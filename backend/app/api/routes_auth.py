@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from slowapi.util import get_remote_address
 
 from app.core.limiter import limiter
@@ -109,7 +109,11 @@ def me(current_user=Depends(get_current_user)):
 
 @router.post("/forgot-password")
 @limiter.limit("5/minute", key_func=get_remote_address)
-def forgot_password_route(payload: ForgotPasswordRequest, request: Request):
+def forgot_password_route(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
     safe_email = sanitize_email(payload.email)
     enforce_auth_attempt_limit(
         request=request,
@@ -120,5 +124,5 @@ def forgot_password_route(payload: ForgotPasswordRequest, request: Request):
     )
     # Redirect back to the frontend reset-password page
     redirect_to = f"{settings.frontend_url}/reset-password"
-    request_password_reset(safe_email, redirect_to)
+    background_tasks.add_task(request_password_reset, safe_email, redirect_to)
     return {"message": "If that email exists, a reset link has been sent."}
