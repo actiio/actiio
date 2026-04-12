@@ -213,6 +213,10 @@ async def _sync_autopay_authorization_from_cashfree(row: dict[str, Any]) -> dict
     auth_details = resp_data.get("authorization_details") or {}
     subscription_status = str(resp_data.get("subscription_status") or "").upper()
     auth_status = str(auth_details.get("authorization_status") or "").upper()
+    logger.info(
+        "Checking autopay status for %s: sub_status=%s, auth_status=%s",
+        subscription_id, subscription_status, auth_status
+    )
     if subscription_status == "ACTIVE" or auth_status in ("ACTIVE", "SUCCESS"):
         updated = {
             "autopay_enabled": True,
@@ -229,13 +233,15 @@ async def _sync_autopay_authorization_from_cashfree(row: dict[str, Any]) -> dict
     # Cleanup: If the local status is "payment_pending" because of an autopay setup, 
     # but the setup was cancelled or never finished (and there's no active payment order),
     # reset the status so the user is not stuck on the "Pending" card.
+    # We broaden this to any non-active status if it has been pending for a bit.
     if (
         row.get("status") == "payment_pending" 
         and not row.get("cashfree_order_id") 
-        and subscription_status in ("INITIALIZED", "LINK_EXPIRED", "CANCELLED")
+        and subscription_status in ("INITIALIZED", "LINK_EXPIRED", "CANCELLED", "PENDING", "DEACTIVATED")
     ):
+        logger.info("Cleaning up stuck autopay setup for %s", subscription_id)
         updated = {
-            "status": "expired", # Fallback to expired if it's not a fresh subscription
+            "status": "expired", # Fallback to expired
             "updated_at": _now_utc().isoformat(),
         }
         (

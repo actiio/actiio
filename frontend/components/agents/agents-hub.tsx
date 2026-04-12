@@ -302,6 +302,20 @@ export function AgentsHub() {
     [fetchSubStatus, pushToast]
   );
 
+  async function handleResetStatus(agentId: string) {
+    const sub = subStatus[agentId];
+    if (!sub) return;
+    
+    // Optimistically update the UI to avoid flickering
+    setSubStatus((prev) => ({
+      ...prev,
+      [agentId]: { ...sub, status: "expired" }, // Fallback to safe state
+    }));
+    
+    // The next check-status call will trigger the backend cleanup
+    await handleCheckStatus(agentId);
+  }
+
   async function handleCheckStatus(agentId: string) {
     setStatusLoadingIds((prev) => (prev.includes(agentId) ? prev : [...prev, agentId]));
     try {
@@ -537,7 +551,17 @@ export function AgentsHub() {
                               ? "Cashfree is confirming your autopay authorization."
                               : "We’re waiting for Cashfree to confirm your payment. This usually takes a minute."}
                           </p>
-                          <div className="mt-6 flex justify-end">
+                          <div className="mt-6 flex justify-end gap-3">
+                            {isAutopayPending && (
+                              <Button
+                                variant="outline"
+                                className="rounded-full px-6 font-bold"
+                                disabled={isCheckingStatus}
+                                onClick={() => void handleResetStatus(agent.id)}
+                              >
+                                Reset & Retry
+                              </Button>
+                            )}
                             <Button
                               className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90"
                               disabled={isCheckingStatus}
