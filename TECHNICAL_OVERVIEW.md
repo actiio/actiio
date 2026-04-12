@@ -396,7 +396,7 @@ The raw body is verified before parsing JSON to prevent body-substitution attack
 3. Backend creates a Cashfree order (₹499 INR), stores `cashfree_order_id` in `user_subscriptions` with status `payment_pending`
 4. Backend returns `payment_session_id` to the frontend
 5. Frontend renders Cashfree checkout
-6. Cashfree fires payment webhooks to `POST /api/payment/webhook`
+6. Cashfree fires payment webhooks to `POST /api/cashfree/webhook`
 7. Backend marks the subscription `active` after a successful charge and sets `current_period_end` to today + 30 days
 8. A subscription activation email is sent via Resend
 
@@ -410,7 +410,7 @@ The raw body is verified before parsing JSON to prevent body-substitution attack
 5. Frontend renders the Cashfree payment JS SDK (opens checkout UI)
 6. User completes payment in Cashfree's hosted checkout
 7. Cashfree redirects to `CASHFREE_RETURN_URL` (the frontend agents page)
-8. Cashfree also fires a webhook to `POST /api/payment/webhook`
+8. Cashfree also fires a webhook to `POST /api/cashfree/webhook`
 9. Backend verifies webhook signature, looks up the subscription by `cashfree_order_id`, and sets status to `active` + sets `current_period_end` to today + 30 days
 10. A subscription activation email is sent via Resend
 

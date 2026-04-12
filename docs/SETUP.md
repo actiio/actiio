@@ -119,5 +119,5 @@ Use two services from the same backend repo:
 4. Add `CASHFREE_PLAN_ID=<your_plan_id>` to backend env.
 5. Each autopay mandate will reference this shared Cashfree plan ID; the backend raises ₹499 charges against the authorized mandate.
 6. Set `CASHFREE_RETURN_URL=http://localhost:3000/agents` in development.
-7. Register `POST https://your-backend-domain/api/payment/webhook` for both payment order events and subscription events.
+7. Register `POST https://your-backend-domain/api/cashfree/webhook` for both payment order events and subscription events.
 8. Enable subscription webhook events: `SUBSCRIPTION_STATUS_CHANGED`, `SUBSCRIPTION_AUTH_STATUS`, `SUBSCRIPTION_PAYMENT_SUCCESS`, `SUBSCRIPTION_PAYMENT_FAILED`, and `SUBSCRIPTION_PAYMENT_CANCELLED`.

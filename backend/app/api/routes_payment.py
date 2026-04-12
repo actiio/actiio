@@ -19,6 +19,7 @@ from app.core.limiter import limiter, user_or_ip_key_func
 from app.core.supabase import get_supabase
 
 router = APIRouter(prefix="/payment", tags=["payment"])
+cashfree_router = APIRouter(prefix="/cashfree", tags=["cashfree"])
 settings = get_settings()
 supabase = get_supabase()
 logger = logging.getLogger(__name__)
@@ -473,10 +474,10 @@ async def create_autopay_subscription(
 
 
 # ---------------------------------------------------------------------------
-# POST /payment/webhook
+# POST /cashfree/webhook
 # ---------------------------------------------------------------------------
 
-@router.post("/webhook")
+@cashfree_router.post("/webhook")
 async def payment_webhook(request: Request):
     """Handle Cashfree payment webhooks. No auth required."""
     if not settings.cashfree_secret_key:

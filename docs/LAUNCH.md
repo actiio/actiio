@@ -5,7 +5,7 @@
 - [ ] Cashfree: App ID and Secret Key configured in env vars
 - [ ] Cashfree: reusable plan created and CASHFREE_PLAN_ID configured
 - [ ] Cashfree: CASHFREE_RETURN_URL configured to the frontend agents page
-- [ ] Cashfree: webhook endpoint registered at https://yourdomain.com/api/payment/webhook
+- [ ] Cashfree: webhook endpoint registered at https://yourdomain.com/api/cashfree/webhook
 - [ ] Cashfree: payment order and subscription webhook events enabled
 - [ ] Railway web service: all env vars set (including CASHFREE_APP_ID, CASHFREE_SECRET_KEY, CASHFREE_PLAN_ID, CASHFREE_RETURN_URL, CASHFREE_ENV=production)
 - [ ] Railway worker service: all env vars set
