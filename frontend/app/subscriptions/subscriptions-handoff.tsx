@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { safeRelativePath } from "@/lib/sanitize";
@@ -23,27 +23,37 @@ function buildAgentsReturnPath(searchParams: URLSearchParams): string {
 export function SubscriptionsHandoff() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [statusText, setStatusText] = useState("Finishing your Cashfree return and taking you back to your workspace.");
 
   useEffect(() => {
     async function handoff() {
       try {
-        // Construct the redirect path with all available query parameters preserved
         const params = new URLSearchParams(window.location.search);
         const nextPath = buildAgentsReturnPath(params);
-        
-        const session = await getSession();
+        const retryDelayMs = [0, 400, 1200, 2400];
 
-        if (session) {
-          // If we have a session, go straight to the agents hub with the status params
-          router.replace(nextPath);
-          return;
+        for (let index = 0; index < retryDelayMs.length; index += 1) {
+          const delay = retryDelayMs[index];
+          if (delay > 0) {
+            setStatusText(index < retryDelayMs.length - 1
+              ? "Restoring your session..."
+              : "Almost there..."
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+
+          const session = await getSession();
+          if (session) {
+            router.replace(nextPath);
+            return;
+          }
         }
 
-        // If no session, go to sign-in and pass the full nextPath (including its query)
+        setStatusText("Sign-in is needed to finish the handoff.");
         router.replace(`/sign-in?next=${encodeURIComponent(nextPath)}`);
       } catch (err) {
         console.error("Handoff redirect failed:", err);
-        // Fallback to a safe place
+        setStatusText("Redirecting to sign-in...");
         router.replace("/sign-in");
       }
     }
@@ -57,9 +67,7 @@ export function SubscriptionsHandoff() {
     <main className="flex min-h-screen items-center justify-center bg-white px-6">
       <div className="w-full max-w-md space-y-3 text-center">
         <h1 className="text-2xl font-bold text-brand-heading">One second</h1>
-        <p className="text-sm text-brand-body/70">
-          Finishing your Cashfree return and taking you back to your workspace.
-        </p>
+        <p className="text-sm text-brand-body/70">{statusText}</p>
         <p className="text-xs text-brand-body/50">Next stop: {nextPath}</p>
       </div>
     </main>
