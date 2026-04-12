@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
-import { apiFetch, connectGmail, createAutopaySubscription, getAgents, getThreads, syncGmail, ignoreThread } from "@/lib/api";
+import { apiFetch, connectGmail, createPaymentOrder, getAgents, getThreads, syncGmail, ignoreThread } from "@/lib/api";
 import { getAgentMeta, isGmailAgent } from "@/lib/agents";
 import { supabase } from "@/lib/supabase";
 import { LeadThread, ThreadDrafts } from "@/lib/types";
@@ -258,9 +258,50 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
   const [currentPage, setCurrentPage] = useState(1);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isActivatingAgent, setIsActivatingAgent] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [gmailStatus, setGmailStatus] = useState<"connected" | "disconnected" | null>(null);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchSubStatus = async () => {
+    try {
+      const agents = await getAgents();
+      const currentAgent = agents.find((item) => item.agent.id === agentId);
+      const status = currentAgent?.subscription?.status || "inactive";
+      setSubscriptionStatus(status);
+      return status;
+    } catch {
+      return "inactive";
+    }
+  };
+
+  const pollUntilActive = async () => {
+    const maxAttempts = 10;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      await new Promise((resolve) => {
+        pollTimerRef.current = setTimeout(resolve, 3000);
+      });
+
+      const status = await fetchSubStatus();
+      if (status === "active") {
+        pushToast("Subscription activated! 🎉");
+        await fetchThreads();
+        void refreshGmailStatus();
+        return;
+      }
+
+      if (status === "payment_pending") {
+        return;
+      }
+
+      if (status === "payment_failed") {
+        pushToast("Payment failed. Please try again.", "error");
+        return;
+      }
+    }
+    pushToast("Payment processing… refresh in a moment.");
+  };
 
   async function refreshGmailStatus() {
     if (!isGmailAgent(agentId)) {
@@ -435,6 +476,13 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
     };
   }, [agentId, subscriptionStatus]);
 
+  // Cleanup poll timer on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, []);
+
   const stats = useMemo(() => {
     return {
       total: threads.length,
@@ -588,14 +636,11 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
   }
 
   async function handleActivateAgent() {
+    setIsActivatingAgent(true);
     try {
-      const resp = await createAutopaySubscription(agentId);
-      if (resp.status === "already_enabled") {
-        pushToast("Autopay is already enabled.");
-        return;
-      }
-      if (!resp.subscription_session_id) {
-        pushToast("Autopay session not available.", "error");
+      const resp = await createPaymentOrder(agentId);
+      if (!resp.payment_session_id) {
+        pushToast("Payment session not available.", "error");
         return;
       }
       const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_ENV === "production" ? "production" : "sandbox" as const;
@@ -604,13 +649,17 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
         return;
       }
       const cashfree = window.Cashfree({ mode: cashfreeMode });
-      await cashfree.subscriptionsCheckout({
-        subsSessionId: resp.subscription_session_id,
-        redirectTarget: "_self",
+      await cashfree.checkout({
+        paymentSessionId: resp.payment_session_id,
+        redirectTarget: "_modal",
       });
+      // Stay in loading state while polling
+      await pollUntilActive();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not start autopay.";
+      const message = error instanceof Error ? error.message : "Could not start checkout.";
       pushToast(message, "error");
+    } finally {
+      setIsActivatingAgent(false);
     }
   }
 
@@ -659,8 +708,13 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
           <p className="text-brand-body/60 text-lg mb-10 leading-relaxed">
             This agent is not active for your account yet. Start a plan to begin monitoring leads in this channel.
           </p>
-          <Button size="lg" className="w-full py-8 text-xl font-bold" onClick={() => void handleActivateAgent()}>
-            Activate Agent
+          <Button
+            size="lg"
+            className="w-full py-8 text-xl font-bold"
+            disabled={isActivatingAgent}
+            onClick={() => void handleActivateAgent()}
+          >
+            {isActivatingAgent ? "Opening checkout..." : "Activate Agent"}
           </Button>
         </Card>
       </div>

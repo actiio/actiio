@@ -81,6 +81,22 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _ensure_user_row(user_id: str, user_email: str) -> None:
+    """Ensure the public user mirror exists before writing FK-backed tables."""
+    email = user_email or f"{user_id}@unknown.actiio.local"
+    (
+        supabase.table("users")
+        .upsert(
+            {
+                "id": user_id,
+                "email": email,
+            },
+            on_conflict="id",
+        )
+        .execute()
+    )
+
+
 def _subscription_plan_details() -> dict[str, Any]:
     if settings.cashfree_plan_id:
         return {
@@ -239,6 +255,7 @@ async def create_order(
     agent_id = validate_agent_id(body.agent_id)
     user_id = str(current_user.id)
     user_email = getattr(current_user, "email", "") or ""
+    _ensure_user_row(user_id, user_email)
 
     # Check for existing active subscription
     existing = (
@@ -353,6 +370,7 @@ async def create_autopay_subscription(
     user_id = str(current_user.id)
     user_email = getattr(current_user, "email", "") or ""
     customer_name = user_email.split("@")[0] if user_email else "Actiio Customer"
+    _ensure_user_row(user_id, user_email)
 
     existing = (
         supabase.table("user_subscriptions")

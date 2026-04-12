@@ -385,29 +385,28 @@ The raw body is verified before parsing JSON to prevent body-substitution attack
 ### Subscription Model
 
 - Single flat price: **₹499/month per agent** (Indian Rupee)
-- Autopay-first billing through Cashfree Subscriptions, with manual order payment still available as fallback
+- Manual first payment through Cashfree Orders, with optional autopay setup after activation
 - 30-day subscription periods
 - Supports early renewal (extends from existing expiry, not current date)
 
-### Autopay Flow — New Subscription
+### Payment Flow — New Subscription
 
 1. User clicks Subscribe in the dashboard
-2. Frontend calls `POST /api/payment/create-autopay`
-3. Backend creates a Cashfree subscription mandate, stores `cashfree_subscription_id`, and sets status to `payment_pending`
-4. Backend returns `subscription_session_id` to the frontend
-5. Frontend renders Cashfree `subscriptionsCheckout`
-6. Cashfree fires subscription auth webhooks to `POST /api/payment/webhook`
-7. Backend marks `autopay_enabled=true` when mandate authorization succeeds, then raises a ₹499 subscription charge
-8. Cashfree fires the subscription payment webhook after the charge is processed
-9. Backend marks the subscription `active` only after a successful charge for the monthly amount, then sets `current_period_end` to today + 30 days
-10. A subscription activation email is sent via Resend
-
-### Manual Payment Flow — Fallback
-
-1. User starts manual payment or renewal
 2. Frontend calls `POST /api/payment/create-order`
 3. Backend creates a Cashfree order (₹499 INR), stores `cashfree_order_id` in `user_subscriptions` with status `payment_pending`
 4. Backend returns `payment_session_id` to the frontend
+5. Frontend renders Cashfree checkout
+6. Cashfree fires payment webhooks to `POST /api/payment/webhook`
+7. Backend marks the subscription `active` after a successful charge and sets `current_period_end` to today + 30 days
+8. A subscription activation email is sent via Resend
+
+### Optional Autopay Flow
+
+1. Active user clicks Set up autopay
+2. Frontend calls `POST /api/payment/create-autopay`
+3. Backend creates a Cashfree subscription mandate and stores `cashfree_subscription_id`
+4. Frontend renders Cashfree `subscriptionsCheckout`
+5. Backend marks `autopay_enabled=true` when mandate authorization succeeds
 5. Frontend renders the Cashfree payment JS SDK (opens checkout UI)
 6. User completes payment in Cashfree's hosted checkout
 7. Cashfree redirects to `CASHFREE_RETURN_URL` (the frontend agents page)

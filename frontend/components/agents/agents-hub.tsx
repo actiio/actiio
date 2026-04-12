@@ -100,6 +100,7 @@ export function AgentsHub() {
   // Subscription state — keyed by agent id
   const [subStatus, setSubStatus] = useState<Record<string, SubscriptionStatus>>({});
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
+  const [statusLoadingIds, setStatusLoadingIds] = useState<string[]>([]);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ------- data loading -------
@@ -210,58 +211,68 @@ export function AgentsHub() {
     }
   }
 
-  async function pollUntilActive(agentId: string) {
-    const maxAttempts = 10;
-    let attempt = 0;
+  const pollUntilActive = useCallback(
+    async (agentId: string) => {
+      const maxAttempts = 10;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        // Wait 3 seconds before polling
+        await new Promise((resolve) => {
+          pollTimerRef.current = setTimeout(resolve, 3000);
+        });
 
-    function doPoll() {
-      attempt += 1;
-      if (attempt > maxAttempts) {
-        pushToast("Payment processing… refresh in a moment.");
-        return;
-      }
-      pollTimerRef.current = setTimeout(async () => {
         const status = await fetchSubStatus(agentId);
         if (status?.status === "active") {
           pushToast("Subscription activated! 🎉");
-          // Also refresh agents list for setup states
           try {
             const data = await getAgents();
             setAgents(data);
-          } catch { /* best-effort */ }
+          } catch {
+            /* best-effort */
+          }
           return;
         }
-        doPoll();
-      }, 3000);
-    }
 
-    doPoll();
+        // If it switched to payment_pending, the UI has already updated to the "Pending" card
+        // which has its own status check button. We can stop polling here to release the loading state.
+        if (status?.status === "payment_pending") {
+          return;
+        }
+
+        // If it failed, stop polling
+        if (status?.status === "payment_failed") {
+          pushToast("Payment failed. Please try again.", "error");
+          return;
+        }
+      }
+
+      pushToast("Payment processing… refresh in a moment.");
+    },
+    [fetchSubStatus, pushToast]
+  );
+
+  async function handleCheckStatus(agentId: string) {
+    setStatusLoadingIds((prev) => (prev.includes(agentId) ? prev : [...prev, agentId]));
+    try {
+      const status = await fetchSubStatus(agentId);
+      if (status?.status === "active") {
+        pushToast("Subscription activated.");
+        try {
+          const data = await getAgents();
+          setAgents(data);
+        } catch {
+          /* best-effort */
+        }
+      } else if (status?.status === "payment_pending") {
+        pushToast("Still waiting for Cashfree confirmation.");
+      } else if (status?.status === "payment_failed") {
+        pushToast("Payment failed. Please try again.", "error");
+      }
+    } finally {
+      setStatusLoadingIds((prev) => prev.filter((id) => id !== agentId));
+    }
   }
 
   async function handleSubscribe(agentId: string) {
-    setPaymentLoading(agentId);
-    try {
-      const resp = await createAutopaySubscription(agentId);
-      if (resp.status === "already_enabled") {
-        pushToast("Autopay is already enabled.");
-        await fetchSubStatus(agentId);
-        return;
-      }
-      if (!resp.subscription_session_id) {
-        throw new Error("No autopay session returned.");
-      }
-      await openCashfreeAutopayCheckout(resp.subscription_session_id);
-      void pollUntilActive(agentId);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Could not start autopay.";
-      pushToast(message, "error");
-    } finally {
-      setPaymentLoading(null);
-    }
-  }
-
-  async function handleManualSubscribe(agentId: string) {
     setPaymentLoading(agentId);
     try {
       const resp = await createPaymentOrder(agentId);
@@ -269,10 +280,10 @@ export function AgentsHub() {
         throw new Error("No payment session returned.");
       }
       await openCashfreeCheckout(resp.payment_session_id);
-      void pollUntilActive(agentId);
+      // Stay in loading state while polling
+      await pollUntilActive(agentId);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Could not start payment.";
+      const message = error instanceof Error ? error.message : "Could not start payment.";
       pushToast(message, "error");
     } finally {
       setPaymentLoading(null);
@@ -287,10 +298,10 @@ export function AgentsHub() {
         throw new Error("No payment session returned.");
       }
       await openCashfreeCheckout(resp.payment_session_id);
-      void pollUntilActive(agentId);
+      // Stay in loading state while polling
+      await pollUntilActive(agentId);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Could not process renewal.";
+      const message = error instanceof Error ? error.message : "Could not process renewal.";
       pushToast(message, "error");
     } finally {
       setPaymentLoading(null);
@@ -450,30 +461,37 @@ export function AgentsHub() {
                     const isActive = sub?.status === "active";
                     const isPending = sub?.status === "payment_pending";
                     const autopayPending = Boolean(sub?.cashfree_subscription_id && !sub.autopay_enabled);
+                    const canRenew = Boolean(sub && sub.days_remaining !== null && sub.days_remaining <= 5);
                     const needsSetup = isActive && agent.id === "gmail_followup" && !item.gmail_connected;
                     const metrics = item.thread_summary || null;
                     const needsAttention = (metrics?.needs_attention || 0) > 0;
 
                     if (isPending) {
+                      const isAutopayPending = Boolean(sub?.cashfree_subscription_id && !sub.autopay_enabled);
+                      const isCheckingStatus = statusLoadingIds.includes(agent.id);
                       return (
                         <Card key={agent.id} className="rounded-2xl border border-gray-100 p-6 hover:shadow-md transition">
                           <div className="flex items-start gap-3">
                             <span className="text-3xl">{agent.icon}</span>
                             <div>
                               <h3 className="text-lg font-semibold text-gray-900">{agent.name}</h3>
-                              <p className="mt-1 text-sm font-medium text-amber-600">Payment pending</p>
+                              <p className="mt-1 text-sm font-medium text-amber-600">
+                                {isAutopayPending ? "Autopay pending" : "Payment pending"}
+                              </p>
                             </div>
                           </div>
                           <p className="mt-5 text-sm leading-relaxed text-gray-600">
-                            Complete autopay authorization to activate this agent.
+                            {isAutopayPending
+                              ? "Cashfree is confirming your autopay authorization."
+                              : "We’re waiting for Cashfree to confirm your payment. This usually takes a minute."}
                           </p>
                           <div className="mt-6 flex justify-end">
                             <Button
                               className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90"
-                              disabled={paymentLoading === agent.id}
-                              onClick={() => void handleSubscribe(agent.id)}
+                              disabled={isCheckingStatus}
+                              onClick={() => void handleCheckStatus(agent.id)}
                             >
-                              {paymentLoading === agent.id ? "Processing…" : "Complete autopay"}
+                              {isCheckingStatus ? "Checking..." : "Check status"}
                             </Button>
                           </div>
                         </Card>
@@ -533,16 +551,14 @@ export function AgentsHub() {
                           <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
                             {sub?.days_remaining ?? 0} days remaining
                           </span>
-                          {sub && sub.days_remaining !== null && sub.days_remaining <= 5 && (
-                            <Button
-                              size="sm"
-                              className="rounded-full bg-brand-primary px-4 text-xs font-bold hover:bg-brand-primary/90"
-                              disabled={paymentLoading === agent.id}
-                              onClick={() => void handleRenew(agent.id)}
-                            >
-                              {paymentLoading === agent.id ? "Processing…" : "Renew — ₹499"}
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            className="rounded-full bg-brand-primary px-4 text-xs font-bold hover:bg-brand-primary/90 disabled:bg-gray-100 disabled:text-gray-400"
+                            disabled={paymentLoading === agent.id || !canRenew}
+                            onClick={() => void handleRenew(agent.id)}
+                          >
+                            {paymentLoading === agent.id ? "Processing…" : "Renew — ₹499"}
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -613,8 +629,8 @@ export function AgentsHub() {
                   const subscribeLabel = isExpired
                     ? "Renew — ₹499"
                     : isFailed
-                    ? "Retry autopay"
-                    : "Subscribe with autopay";
+                    ? "Retry payment — ₹499"
+                    : "Subscribe — ₹499";
 
                   return (
                     <Card key={agent.id} className="rounded-2xl border border-gray-100 p-6 hover:shadow-md transition">
@@ -634,33 +650,21 @@ export function AgentsHub() {
                         </div>
                       </div>
                       <p className="mt-5 text-sm leading-relaxed text-gray-600">{agent.description}</p>
-                      <div className="mt-6 flex flex-wrap justify-end gap-2">
+                      <div className="mt-6 flex justify-end">
                         {showSubscribe ? (
-                          <>
-                            {!isExpired && (
-                              <Button
-                                variant="outline"
-                                className="rounded-full px-5 font-bold"
-                                disabled={paymentLoading === agent.id}
-                                onClick={() => void handleManualSubscribe(agent.id)}
-                              >
-                                Pay once
-                              </Button>
-                            )}
-                            <Button
-                              className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90"
-                              disabled={paymentLoading === agent.id}
-                              onClick={() =>
-                                isExpired
-                                  ? void handleRenew(agent.id)
-                                  : void handleSubscribe(agent.id)
-                              }
-                            >
-                              {paymentLoading === agent.id
-                                ? "Processing…"
-                                : subscribeLabel}
-                            </Button>
-                          </>
+                          <Button
+                            className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90"
+                            disabled={paymentLoading === agent.id}
+                            onClick={() =>
+                              isExpired
+                                ? void handleRenew(agent.id)
+                                : void handleSubscribe(agent.id)
+                            }
+                          >
+                            {paymentLoading === agent.id
+                              ? "Processing…"
+                              : subscribeLabel}
+                          </Button>
                         ) : (
                           <Button
                             variant={item.on_waitlist ? "outline" : "default"}
