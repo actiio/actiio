@@ -343,7 +343,7 @@ export function AgentsHub() {
   }
 
   async function handleRenew(agentId: string) {
-    setPaymentLoading(agentId);
+    setPaymentLoading(`renew:${agentId}`);
     try {
       const resp = await renewSubscription(agentId);
       if (!resp.payment_session_id) {
@@ -361,7 +361,7 @@ export function AgentsHub() {
   }
 
   async function handleAutopay(agentId: string) {
-    setPaymentLoading(agentId);
+    setPaymentLoading(`autopay:${agentId}`);
     try {
       const resp = await createAutopaySubscription(agentId);
       if (resp.status === "already_enabled") {
@@ -466,10 +466,10 @@ export function AgentsHub() {
               <Button
                 size="sm"
                 className="shrink-0 rounded-full bg-amber-600 px-5 font-bold text-white hover:bg-amber-700"
-                disabled={paymentLoading === agentId}
+                disabled={paymentLoading === `renew:${agentId}`}
                 onClick={() => void handleRenew(agentId)}
               >
-                {paymentLoading === agentId ? "Processing…" : "Renew"}
+                {paymentLoading === `renew:${agentId}` ? "Processing…" : "Renew"}
               </Button>
             </div>
           ))}
@@ -606,23 +606,23 @@ export function AgentsHub() {
                           <Button
                             size="sm"
                             className="rounded-full bg-brand-primary px-4 text-xs font-bold hover:bg-brand-primary/90 disabled:bg-gray-100 disabled:text-gray-400"
-                            disabled={paymentLoading === agent.id || !canRenew}
+                            disabled={paymentLoading?.includes(agent.id) || !canRenew}
                             onClick={() => void handleRenew(agent.id)}
                           >
-                            {paymentLoading === agent.id ? "Processing…" : "Renew — ₹499"}
+                            {paymentLoading === `renew:${agent.id}` ? "Processing…" : "Renew — ₹499"}
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             className="rounded-full px-4 text-xs font-bold"
-                            disabled={paymentLoading === agent.id || sub?.autopay_enabled || autopayPending}
+                            disabled={paymentLoading?.includes(agent.id) || sub?.autopay_enabled || autopayPending}
                             onClick={() => void handleAutopay(agent.id)}
                           >
                             {sub?.autopay_enabled
                               ? "Autopay on"
                               : autopayPending
                               ? "Autopay pending"
-                              : paymentLoading === agent.id
+                              : paymentLoading === `autopay:${agent.id}`
                               ? "Processing…"
                               : "Set up autopay"}
                           </Button>
@@ -706,14 +706,14 @@ export function AgentsHub() {
                         {showSubscribe ? (
                           <Button
                             className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90"
-                            disabled={paymentLoading === agent.id}
+                            disabled={paymentLoading?.includes(agent.id)}
                             onClick={() =>
                               isExpired
                                 ? void handleRenew(agent.id)
                                 : void handleSubscribe(agent.id)
                             }
                           >
-                            {paymentLoading === agent.id
+                            {paymentLoading === `renew:${agent.id}` || paymentLoading === agent.id
                               ? "Processing…"
                               : subscribeLabel}
                           </Button>
