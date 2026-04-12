@@ -26,19 +26,30 @@ export function SubscriptionsHandoff() {
 
   useEffect(() => {
     async function handoff() {
-      const nextPath = buildAgentsReturnPath(new URLSearchParams(searchParams.toString()));
-      const session = await getSession();
+      try {
+        // Construct the redirect path with all available query parameters preserved
+        const params = new URLSearchParams(window.location.search);
+        const nextPath = buildAgentsReturnPath(params);
+        
+        const session = await getSession();
 
-      if (session) {
-        router.replace(nextPath);
-        return;
+        if (session) {
+          // If we have a session, go straight to the agents hub with the status params
+          router.replace(nextPath);
+          return;
+        }
+
+        // If no session, go to sign-in and pass the full nextPath (including its query)
+        router.replace(`/sign-in?next=${encodeURIComponent(nextPath)}`);
+      } catch (err) {
+        console.error("Handoff redirect failed:", err);
+        // Fallback to a safe place
+        router.replace("/sign-in");
       }
-
-      router.replace(`/sign-in?next=${encodeURIComponent(nextPath)}`);
     }
 
     void handoff();
-  }, [router, searchParams]);
+  }, [router]);
 
   const nextPath = safeRelativePath(buildAgentsReturnPath(new URLSearchParams(searchParams.toString())));
 

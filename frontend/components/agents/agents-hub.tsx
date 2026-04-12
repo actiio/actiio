@@ -139,8 +139,9 @@ export function AgentsHub() {
           .filter((a) => a.agent.status === "active")
           .map((a) => a.agent.id);
         await Promise.allSettled(activeAgentIds.map(fetchSubStatus));
-      } catch {
-        pushToast("Failed to load agents hub.");
+      } catch (err) {
+        console.error("AgentsHub init failed:", err);
+        pushToast("Failed to load agents hub.", "error");
       } finally {
         setLoading(false);
       }
@@ -158,34 +159,49 @@ export function AgentsHub() {
   // Handle Cashfree autopay return redirect:
   // e.g. /agents?subscription_id=ACTIIO-SUB-...&agent_id=gmail_followup&autopay=true
   useEffect(() => {
-    const agentId = searchParams.get("agent_id");
+    const agentId = searchParams.get("agent_id") || searchParams.get("subscription_id")?.split("-")?.[2]; // Fallback if agent_id is missing but sub_id is there
     const isAutopay = searchParams.get("autopay") === "true";
     if (!agentId || !isAutopay) return;
 
     // Clean the URL so a refresh doesn't re-trigger this
-    const cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete("subscription_id");
-    cleanUrl.searchParams.delete("agent_id");
-    cleanUrl.searchParams.delete("autopay");
-    window.history.replaceState({}, "", cleanUrl.pathname + (cleanUrl.search || ""));
+    try {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete("subscription_id");
+      cleanUrl.searchParams.delete("agent_id");
+      cleanUrl.searchParams.delete("autopay");
+      window.history.replaceState({}, "", cleanUrl.pathname + (cleanUrl.search || ""));
+    } catch (e) {
+      console.warn("Failed to clean URL:", e);
+    }
 
     // Show immediate feedback and then poll for confirmation
     pushToast("Autopay setup received — checking status…");
+    
+    let isMounted = true;
     void (async () => {
-      // Give Cashfree's webhook a few seconds to fire first
-      await new Promise((r) => setTimeout(r, 4000));
-      const status = await fetchSubStatus(agentId);
-      if (status?.status === "active" && status.autopay_enabled) {
-        pushToast("Autopay is now active! 🎉");
-      } else if (status?.status === "active" || status?.status === "payment_pending") {
-        pushToast("Cashfree is still confirming autopay. Check back shortly.");
-      }
-      // Refresh the agents list so the card reflects the latest state
       try {
+        // Give Cashfree's webhook a few seconds to fire first
+        await new Promise((r) => setTimeout(r, 4000));
+        if (!isMounted) return;
+
+        const status = await fetchSubStatus(agentId);
+        if (!isMounted) return;
+
+        if (status?.status === "active" && status.autopay_enabled) {
+          pushToast("Autopay is now active! 🎉");
+        } else if (status?.status === "active" || status?.status === "payment_pending") {
+          pushToast("Cashfree is still confirming autopay. Check back shortly.");
+        }
+        
+        // Refresh the agents list so the card reflects the latest state
         const data = await getAgents();
-        setAgents(data);
-      } catch { /* best-effort */ }
+        if (isMounted) setAgents(data);
+      } catch (err) {
+        console.error("Autopay confirmation failed:", err);
+      }
     })();
+
+    return () => { isMounted = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount only
 
@@ -196,8 +212,10 @@ export function AgentsHub() {
     };
   }, []);
 
-  const greeting = useMemo(() => {
-    return `${greetingForHour(new Date().getHours())}.`;
+  const [greeting, setGreeting] = useState("Hello.");
+
+  useEffect(() => {
+    setGreeting(`${greetingForHour(new Date().getHours())}.`);
   }, []);
 
   const subscribedAgents = useMemo(() => {

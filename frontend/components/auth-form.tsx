@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { hasUnsafeControlChars, safeRelativePath, sanitizeEmail } from "@/lib/sanitize";
+import { hasUnsafeControlChars, mergeQueryParams, safeRelativePath, sanitizeEmail } from "@/lib/sanitize";
 import { supabase } from "@/lib/supabase";
 
 function toFriendlyAuthError(message: string): string {
@@ -36,16 +36,26 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
     // redirect immediately rather than waiting for a new SIGNED_IN event.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        const nextPath = safeRelativePath(new URLSearchParams(window.location.search).get("next"));
+        const search = new URLSearchParams(window.location.search);
+        let nextPath = safeRelativePath(search.get("next"));
+        
+        // Preserve autopay/subscription params if they were provided at the top level
+        nextPath = mergeQueryParams(nextPath, search);
+        
         router.push(nextPath);
         router.refresh();
       }
+    }).catch(err => {
+      console.error("Session check failed:", err);
     });
 
-    // Also handle the email-link new-tab case: redirect when auth state changes to SIGNED_IN.
+    // Also handle cases where auth state changes (e.g. magic links, login completion)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN") {
-        const nextPath = safeRelativePath(new URLSearchParams(window.location.search).get("next"));
+        const search = new URLSearchParams(window.location.search);
+        let nextPath = safeRelativePath(search.get("next"));
+        nextPath = mergeQueryParams(nextPath, search);
+        
         router.push(nextPath);
         router.refresh();
       }
@@ -98,7 +108,10 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       return;
     }
 
-    const nextPath = safeRelativePath(new URLSearchParams(window.location.search).get("next"));
+    const search = new URLSearchParams(window.location.search);
+    let nextPath = safeRelativePath(search.get("next"));
+    nextPath = mergeQueryParams(nextPath, search);
+    
     router.push(nextPath);
     router.refresh();
   }
