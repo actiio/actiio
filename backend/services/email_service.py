@@ -153,7 +153,7 @@ def send_subscription_activated_email(
 
 
 def send_confirmation_email(user_email: str, confirmation_link: str) -> None:
-    """Send a premium account confirmation email."""
+    """Send a mobile-friendly confirmation email that matches the simple card layout."""
     settings = get_settings()
     logo_url = _get_logo_url()
 
@@ -163,52 +163,76 @@ def send_confirmation_email(user_email: str, confirmation_link: str) -> None:
 
     resend.api_key = settings.resend_api_key
 
+    logo_markup = (
+        f'''
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="vertical-align:middle;">
+              <img src="{logo_url}" alt="Actiio" width="40" height="40" style="display:block;width:40px;height:40px;border:0;outline:none;text-decoration:none;">
+            </td>
+            <td style="padding-left:12px;vertical-align:middle;font-size:32px;line-height:32px;font-weight:800;letter-spacing:-0.04em;color:#111111;">
+              Actiio
+            </td>
+          </tr>
+        </table>
+        '''
+        if logo_url
+        else '<div style="font-size:32px;line-height:32px;font-weight:800;letter-spacing:-0.04em;color:#111111;"><span style="color:#00BF63;">A</span>ctiio</div>'
+    )
+
     html = f"""
     <!DOCTYPE html>
-    <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+    <html lang="en">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <meta name="color-scheme" content="light dark">
-      <meta name="supported-color-schemes" content="light dark">
-      <!--[if !mso]><!-->
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
-      <!--<![endif]-->
       <style>
-        :root {{ color-scheme: light dark; supported-color-schemes: light dark; }}
-        body {{ -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-size-adjust: 100%; }}
+        body {{ margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111111; }}
         @media (max-width: 600px) {{
-          .container {{ width: 100% !important; border-radius: 0 !important; border: none !important; }}
-          .mobile-padding {{ padding: 32px 24px !important; }}
+          .shell {{ padding: 20px 12px !important; }}
+          .card {{ border-radius: 20px !important; }}
+          .section {{ padding-left: 24px !important; padding-right: 24px !important; }}
+          .headline {{ font-size: 30px !important; line-height: 1.14 !important; }}
+          .copy {{ font-size: 16px !important; line-height: 1.6 !important; }}
+          .button {{ display: block !important; width: 100% !important; box-sizing: border-box; text-align: center !important; min-width: 0 !important; }}
         }}
       </style>
     </head>
-    <body style="margin: 0; padding: 0; background-color: #000000; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #000000;">
+    <body>
+      <table border="0" cellpadding="0" cellspacing="0" width="100%">
         <tr>
-          <td align="center" style="padding: 24px 16px;">
-            <table class="container" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 440px; background-color: #111111; border: 1px solid #222222; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+          <td align="center" class="shell" style="padding: 32px 16px;">
+            <table class="card" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 680px; background-color: #ffffff; border-radius: 26px; overflow: hidden;">
               <tr>
-                <td align="center" class="mobile-padding" style="padding: 48px 40px 24px;">
-                  <img src="{logo_url}" alt="Actiio" width="56" height="56" style="display: block; border-radius: 14px; filter: drop-shadow(0 0 12px rgba(0, 191, 99, 0.4));">
+                <td class="section" style="padding: 56px 56px 28px;">
+                  {logo_markup}
                 </td>
               </tr>
               <tr>
-                <td align="center" class="mobile-padding" style="padding: 0 40px 48px;">
-                  <h1 style="color: #ffffff !important; font-size: 32px; font-weight: 800; letter-spacing: -0.04em; margin: 0 0 16px; line-height: 1.1; display: block;">Welcome to Actiio.</h1>
-                  <p style="color: #A1A1AA !important; font-size: 16px; line-height: 1.6; margin: 0 0 32px; display: block;">Never lose a warm lead again. Confirm your account to start automating your follow-ups.</p>
+                <td class="section" style="padding: 0 56px 20px;">
+                  <h1 class="headline" style="font-size: 42px; font-weight: 800; letter-spacing: -0.05em; margin: 0 0 22px; line-height: 1.08; color:#111111;">
+                    Confirm your email
+                  </h1>
+                  <p class="copy" style="max-width: 520px; font-size: 20px; line-height: 1.65; color: #5f6368; margin: 0 0 36px;">
+                    Thanks for signing up for Actiio. Click the button below to verify your email address and get started.
+                  </p>
                   <table border="0" cellpadding="0" cellspacing="0">
                     <tr>
-                      <td align="center" bgcolor="#00BF63" style="border-radius: 100px;">
-                        <a href="{confirmation_link}" style="display: inline-block; padding: 18px 36px; font-size: 16px; font-weight: 700; color: #ffffff !important; text-decoration: none; border-radius: 100px; text-align: center;">Confirm Account</a>
+                      <td align="center" bgcolor="#22c55e" style="border-radius: 18px;">
+                        <a class="button" href="{confirmation_link}" style="display: inline-block; min-width: 220px; padding: 18px 28px; font-size: 18px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 18px; text-align: center;">
+                          Confirm email
+                        </a>
                       </td>
                     </tr>
                   </table>
                 </td>
               </tr>
               <tr>
-                <td align="center" style="padding: 24px; border-top: 1px solid #222222; background-color: #0c0c0c;">
-                  <p style="color: #71717A !important; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; margin: 0;">© 2026 Actiio AI · Scale Intelligence</p>
+                <td class="section" style="padding: 52px 56px 56px;">
+                  <div style="height:1px;background:#e8eaed;margin-bottom:28px;"></div>
+                  <p style="font-size: 14px; line-height: 1.7; color: #8b9096; margin: 0;">
+                    Team Actiio · <a href="https://actiio.co" style="color: #2563eb; text-decoration: underline;">actiio.co</a>
+                  </p>
                 </td>
               </tr>
             </table>
@@ -242,9 +266,20 @@ def send_password_reset_email(user_email: str, reset_link: str) -> None:
     resend.api_key = settings.resend_api_key
 
     logo_markup = (
-        f'<img src="{logo_url}" alt="Actiio" width="40" height="40" style="display:block;width:40px;height:40px;border:0;outline:none;text-decoration:none;">'
+        f'''
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="vertical-align:middle;">
+              <img src="{logo_url}" alt="Actiio" width="40" height="40" style="display:block;width:40px;height:40px;border:0;outline:none;text-decoration:none;">
+            </td>
+            <td style="padding-left:12px;vertical-align:middle;font-size:32px;line-height:32px;font-weight:800;letter-spacing:-0.04em;color:#111111;">
+              Actiio
+            </td>
+          </tr>
+        </table>
+        '''
         if logo_url
-        else '<div style="width:40px;height:40px;border-radius:12px;background:#111827;color:#ffffff;font-size:20px;font-weight:800;line-height:40px;text-align:center;">A</div>'
+        else '<div style="font-size:32px;line-height:32px;font-weight:800;letter-spacing:-0.04em;color:#111111;"><span style="color:#00BF63;">A</span>ctiio</div>'
     )
 
     html = f"""
@@ -253,15 +288,15 @@ def send_password_reset_email(user_email: str, reset_link: str) -> None:
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
       <style>
-        body {{ margin: 0; padding: 0; background-color: #f3f4f6; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111827; }}
+        body {{ margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111111; }}
         @media (max-width: 600px) {{
           .shell {{ padding: 20px 12px !important; }}
           .card {{ border-radius: 20px !important; }}
-          .section {{ padding: 28px 24px !important; }}
-          .headline {{ font-size: 30px !important; }}
-          .button {{ display: block !important; width: 100% !important; box-sizing: border-box; }}
+          .section {{ padding-left: 24px !important; padding-right: 24px !important; }}
+          .headline {{ font-size: 30px !important; line-height: 1.14 !important; }}
+          .copy {{ font-size: 16px !important; line-height: 1.6 !important; }}
+          .button {{ display: block !important; width: 100% !important; box-sizing: border-box; text-align: center !important; }}
         }}
       </style>
     </head>
@@ -269,39 +304,25 @@ def send_password_reset_email(user_email: str, reset_link: str) -> None:
       <table border="0" cellpadding="0" cellspacing="0" width="100%">
         <tr>
           <td align="center" class="shell" style="padding: 32px 16px;">
-            <table class="card" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 560px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 28px; overflow: hidden; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);">
+            <table class="card" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 680px; background-color: #ffffff; border-radius: 26px; overflow: hidden;">
               <tr>
-                <td class="section" style="padding: 32px 40px 20px;">
-                  <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                    <tr>
-                      <td style="vertical-align: middle;">{logo_markup}</td>
-                      <td style="padding-left: 14px; vertical-align: middle;">
-                        <div style="font-size: 18px; font-weight: 800; color: #111827; letter-spacing: -0.03em;">Actiio</div>
-                        <div style="font-size: 12px; color: #6b7280; padding-top: 2px;">Password reset request</div>
-                      </td>
-                    </tr>
-                  </table>
+                <td class="section" style="padding: 56px 56px 28px;">
+                  {logo_markup}
                 </td>
               </tr>
               <tr>
-                <td class="section" style="padding: 0 40px 12px;">
-                  <div style="display:inline-block;background:#ecfdf3;color:#047857;border:1px solid #a7f3d0;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:700;letter-spacing:0.02em;">
-                    Secure access
-                  </div>
-                  <h1 class="headline" style="font-size: 36px; font-weight: 800; letter-spacing: -0.05em; margin: 18px 0 14px; line-height: 1.05; color:#111827;">
+                <td class="section" style="padding: 0 56px 20px;">
+                  <h1 class="headline" style="font-size: 42px; font-weight: 800; letter-spacing: -0.05em; margin: 0 0 22px; line-height: 1.08; color:#111111;">
                     Reset your password
                   </h1>
-                  <p style="font-size: 16px; line-height: 1.7; color: #4b5563; margin: 0 0 18px;">
-                    We received a request to reset the password for your Actiio account. Use the button below to choose a new password.
-                  </p>
-                  <p style="font-size: 16px; line-height: 1.7; color: #4b5563; margin: 0 0 32px;">
-                    For your security, this link expires in 1 hour. If you did not request this, you can safely ignore this email.
+                  <p class="copy" style="max-width: 520px; font-size: 20px; line-height: 1.65; color: #5f6368; margin: 0 0 36px;">
+                    We received a request to reset your Actiio password. Click the button below to choose a new one. If you didn't request this, you can safely ignore this email.
                   </p>
                   <table border="0" cellpadding="0" cellspacing="0">
                     <tr>
-                      <td align="center" bgcolor="#00BF63" style="border-radius: 999px;">
-                        <a class="button" href="{reset_link}" style="display: inline-block; padding: 16px 28px; font-size: 16px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 999px; text-align: center;">
-                          Reset Password
+                      <td align="center" bgcolor="#22c55e" style="border-radius: 18px;">
+                        <a class="button" href="{reset_link}" style="display: inline-block; min-width: 220px; padding: 18px 28px; font-size: 18px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 18px; text-align: center;">
+                          Reset password
                         </a>
                       </td>
                     </tr>
@@ -309,16 +330,10 @@ def send_password_reset_email(user_email: str, reset_link: str) -> None:
                 </td>
               </tr>
               <tr>
-                <td class="section" style="padding: 28px 40px 36px;">
-                  <div style="height:1px;background:#e5e7eb;margin-bottom:20px;"></div>
-                  <p style="font-size: 13px; line-height: 1.7; color: #6b7280; margin: 0 0 10px;">
-                    Button not working? Copy and paste this link into your browser:
-                  </p>
-                  <p style="margin: 0 0 18px; word-break: break-all;">
-                    <a href="{reset_link}" style="color: #047857; font-size: 13px; line-height: 1.6; text-decoration: underline;">{reset_link}</a>
-                  </p>
-                  <p style="font-size: 12px; line-height: 1.6; color: #9ca3af; margin: 0;">
-                    Actiio AI
+                <td class="section" style="padding: 52px 56px 56px;">
+                  <div style="height:1px;background:#e8eaed;margin-bottom:28px;"></div>
+                  <p style="font-size: 14px; line-height: 1.7; color: #8b9096; margin: 0;">
+                    Team Actiio · <a href="https://actiio.co" style="color: #2563eb; text-decoration: underline;">actiio.co</a> · If you didn't request this, ignore this email.
                   </p>
                 </td>
               </tr>
