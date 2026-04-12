@@ -1,10 +1,32 @@
-"use client";
-
 import Link from "next/link";
 import Image from "next/image";
-import { AuthForm } from "@/components/auth-form";
+import { redirect } from "next/navigation";
 
-export default function SignInPage() {
+import { AuthForm } from "@/components/auth-form";
+import { getServerUser } from "@/lib/supabase-server";
+import { mergeQueryParams, safeRelativePath } from "@/lib/sanitize";
+
+export default async function SignInPage(props: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const user = await getServerUser();
+  const searchParams = await props.searchParams;
+
+  if (user) {
+    // If already signed in, redirect immediately on the server
+    const nextArg = typeof searchParams.next === "string" ? searchParams.next : "/agents";
+    let nextPath = safeRelativePath(nextArg);
+    
+    // Carry over relevant params like subscription_id, etc.
+    const params = new URLSearchParams();
+    Object.entries(searchParams).forEach(([key, val]) => {
+      if (typeof val === "string") params.set(key, val);
+    });
+    
+    nextPath = mergeQueryParams(nextPath, params);
+    redirect(nextPath);
+  }
+
   return (
     <main className="flex min-h-screen bg-white overflow-visible">
       {/* Left side - dark branding */}

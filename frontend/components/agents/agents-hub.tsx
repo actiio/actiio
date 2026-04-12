@@ -159,7 +159,7 @@ export function AgentsHub() {
   // Handle Cashfree autopay return redirect:
   // e.g. /agents?subscription_id=ACTIIO-SUB-...&agent_id=gmail_followup&autopay=true
   useEffect(() => {
-    const agentId = searchParams.get("agent_id") || searchParams.get("subscription_id")?.split("-")?.[2]; // Fallback if agent_id is missing but sub_id is there
+    const agentId = searchParams.get("agent_id") || searchParams.get("subscription_id")?.split("-")?.[3]; // Correct index is 3
     const isAutopay = searchParams.get("autopay") === "true";
     if (!agentId || !isAutopay) return;
 
