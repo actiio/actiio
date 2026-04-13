@@ -125,6 +125,30 @@ def _run_initial_sync_after_connect(user_id: str, agent_id: str) -> None:
         logger.warning("Post-connect Gmail sync failed for user %s (%s): %s", user_id, agent_id, exc)
 
 
+def _build_gmail_settings_redirect(
+    agent_id: str,
+    *,
+    gmail_connected: bool | None = None,
+    gmail_error: str | None = None,
+) -> str:
+    settings = get_settings()
+    redirect_url = (
+        (settings.frontend_url or "http://localhost:3000").rstrip("/")
+        + f"/agents/{agent_id}/settings"
+    )
+
+    params: list[str] = []
+    if gmail_connected:
+        params.append("gmail_connected=1")
+    if gmail_error:
+        params.append(f"gmail_error={gmail_error}")
+
+    if params:
+        redirect_url = f"{redirect_url}?{'&'.join(params)}"
+
+    return redirect_url
+
+
 @router.get("/auth", response_model=GmailAuthUrlResponse)
 def gmail_auth(agent_id: str = Query(default="gmail_followup"), current_user=Depends(get_current_user)):
     agent_id = validate_agent_id(agent_id)
@@ -138,13 +162,30 @@ def gmail_auth(agent_id: str = Query(default="gmail_followup"), current_user=Dep
 @router.get("/callback")
 def gmail_callback(
     background_tasks: BackgroundTasks,
-    code: str = Query(...),
+    code: Optional[str] = Query(default=None),
     state: Optional[str] = Query(default=None),
+    error: Optional[str] = Query(default=None),
 ):
     parsed_user_id, agent_id = parse_state(state)
     if not parsed_user_id:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
     agent_id = validate_agent_id(agent_id)
+
+    if error:
+        logger.info(
+            "Gmail OAuth cancelled or failed for user %s (%s): %s",
+            parsed_user_id,
+            agent_id,
+            error,
+        )
+        return RedirectResponse(
+            url=_build_gmail_settings_redirect(agent_id, gmail_error="cancelled")
+        )
+
+    if not code:
+        return RedirectResponse(
+            url=_build_gmail_settings_redirect(agent_id, gmail_error="missing_code")
+        )
 
     try:
         handle_callback(code=code, user_id=parsed_user_id, agent_id=agent_id)
@@ -156,12 +197,7 @@ def gmail_callback(
             exc=exc,
             detail="Failed to connect Gmail account.",
         )
-    settings = get_settings()
-    redirect_url = (
-        (settings.frontend_url or "http://localhost:3000").rstrip("/")
-        + f"/agents/{agent_id}/settings?gmail_connected=1"
-    )
-    return RedirectResponse(url=redirect_url)
+    return RedirectResponse(url=_build_gmail_settings_redirect(agent_id, gmail_connected=True))
 
 
 @router.post("/sync", response_model=GmailSyncResponse)

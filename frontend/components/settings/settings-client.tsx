@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { SalesAssetsUploader } from "@/components/sales-assets-uploader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -149,6 +150,7 @@ export function SettingsClient({
   mode?: "settings" | "onboarding";
 }) {
   const meta = getAgentMeta(agentId);
+  const searchParams = useSearchParams();
   const isOnboarding = mode === "onboarding";
   const settingsHeaderTitle = isOnboarding
     ? `Set Up ${meta.shortName}`
@@ -251,6 +253,29 @@ export function SettingsClient({
     }
     void load();
   }, [agentId]);
+
+  useEffect(() => {
+    const gmailConnectedParam = searchParams.get("gmail_connected");
+    const gmailError = searchParams.get("gmail_error");
+
+    if (!gmailConnectedParam && !gmailError) {
+      return;
+    }
+
+    if (gmailConnectedParam === "1") {
+      setGmailConnected(true);
+      pushToast("Gmail connected successfully.");
+    } else if (gmailError === "cancelled") {
+      pushToast("Gmail connection was cancelled.", "error");
+    } else if (gmailError === "missing_code") {
+      pushToast("Gmail connection could not be completed. Please try again.", "error");
+    }
+
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("gmail_connected");
+    cleanUrl.searchParams.delete("gmail_error");
+    window.history.replaceState({}, "", cleanUrl.toString());
+  }, [pushToast, searchParams]);
 
   async function save(showToast = true) {
     const validationMessage = getProfileValidationMessage(form);
