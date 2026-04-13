@@ -119,7 +119,7 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
     <div className="min-h-screen bg-[#fcfcfc] text-brand-heading selection:bg-brand-primary/20">
       <nav
         className={cn(
-          "fixed top-0 z-50 w-full transition-all duration-500 px-6 py-4",
+          "fixed top-0 z-50 w-full px-4 py-3 transition-all duration-500 sm:px-6 sm:py-4",
           scrolled ? "bg-white/80 backdrop-blur-xl border-b border-gray-100 shadow-sm" : "bg-transparent"
         )}
       >
@@ -129,7 +129,7 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
             <div className="relative h-8 w-8 overflow-hidden rounded-xl bg-brand-primary p-1.5 transition-transform group-hover:rotate-12">
               <Image src="/logo.png" alt="Actiio Logo" width={32} height={32} className="h-full w-full object-contain brightness-0 invert" />
             </div>
-            <span className="text-2xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-brand-heading to-brand-body">
+            <span className="bg-gradient-to-r from-brand-heading to-brand-body bg-clip-text text-xl font-black tracking-tight text-transparent sm:text-2xl">
               Actiio
             </span>
           </Link>
@@ -148,21 +148,21 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
           </div>
 
           {/* Right: Auth/Platform */}
-          <div className="flex items-center gap-5 relative z-10">
+          <div className="relative z-10 flex items-center gap-3 sm:gap-5">
             {!isAuthenticated ? (
-              <Link href="/sign-in" className="text-sm font-bold text-brand-body/60 hover:text-brand-primary transition-colors">
+              <Link href="/sign-in" className="text-xs font-bold text-brand-body/60 transition-colors hover:text-brand-primary sm:text-sm">
                 Sign in
               </Link>
             ) : (
               <button
                 onClick={handleSignOut}
-                className="text-sm font-bold text-brand-body/60 hover:text-red-500 transition-colors"
+                className="text-xs font-bold text-brand-body/60 transition-colors hover:text-red-500 sm:text-sm"
               >
                 Sign out
               </button>
             )}
             <Link href={isAuthenticated ? "/agents" : "/sign-up"}>
-              <Button size="lg" className="rounded-full px-8 font-black shadow-xl shadow-brand-primary/20 hover:scale-105 transition-all">
+              <Button size="lg" className="h-11 rounded-full px-4 text-sm font-black shadow-xl shadow-brand-primary/20 transition-all hover:scale-105 sm:h-14 sm:px-8 sm:text-base">
                 {isAuthenticated ? "Go to Platform" : "Get Started"}
               </Button>
             </Link>
@@ -171,13 +171,13 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
       </nav>
 
       <main>
-        <section className="relative overflow-hidden px-6 pb-24 pt-44 text-center lg:pb-32 lg:pt-56">
+        <section className="relative overflow-hidden px-4 pb-16 pt-28 text-center sm:px-6 sm:pb-20 sm:pt-36 lg:pb-32 lg:pt-56">
           <div className="absolute left-1/2 top-0 -translate-x-1/2 overflow-visible opacity-40 blur-[72px] pointer-events-none">
             <div className="h-[600px] w-[800px] rounded-full bg-gradient-to-tr from-brand-primary/20 to-brand-primary/5" />
           </div>
 
           <div className="relative z-10 mx-auto max-w-5xl">
-            <div className="mx-auto mb-8 flex w-fit items-center gap-2 rounded-full border border-brand-primary/20 bg-brand-primary/5 px-5 py-2">
+            <div className="mx-auto mb-6 flex w-fit items-center gap-2 rounded-full border border-brand-primary/20 bg-brand-primary/5 px-4 py-2 sm:mb-8 sm:px-5">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-primary"></span>
@@ -192,19 +192,19 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
               </span>
             </h1>
 
-            <p className="mx-auto max-w-2xl text-xl leading-relaxed text-brand-body/70 font-medium pt-4">
+            <p className="mx-auto max-w-2xl pt-4 text-base font-medium leading-relaxed text-brand-body/70 sm:text-lg lg:text-xl">
               Actiio monitors your Gmail conversations, detects when leads go quiet, and generates smart follow-up
               messages automatically.
             </p>
 
-            <div className="flex flex-col items-center justify-center gap-6 pt-10 sm:flex-row">
+            <div className="flex flex-col items-stretch justify-center gap-3 pt-8 sm:flex-row sm:items-center sm:gap-6 sm:pt-10">
               <a href="#agents-hub">
-                <Button size="xl" className="h-16 rounded-full px-12 text-lg font-black shadow-2xl shadow-brand-primary/30 hover:-translate-y-1 transition-all">
+                <Button size="xl" className="h-14 w-full rounded-full px-8 text-base font-black shadow-2xl shadow-brand-primary/30 transition-all hover:-translate-y-1 sm:h-16 sm:px-12 sm:text-lg">
                   Browse All Agents
                 </Button>
               </a>
               <a href="#how-it-works">
-                <Button variant="ghost" size="xl" className="h-16 rounded-full px-10 text-lg font-black text-brand-body hover:text-brand-primary">
+                <Button variant="ghost" size="xl" className="h-13 w-full rounded-full px-8 text-base font-black text-brand-body hover:text-brand-primary sm:h-16 sm:px-10 sm:text-lg">
                   See how it works
                 </Button>
               </a>
@@ -219,18 +219,18 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
           </div>
         </section>
 
-        <section id="agents-hub" className="bg-[#050505] px-6 py-32 text-white relative overflow-hidden lg:rounded-[4rem] mx-6 shadow-[0_32px_80px_rgba(0,0,0,0.24)] scroll-mt-24">
+        <section id="agents-hub" className="relative mx-4 overflow-hidden bg-[#050505] px-4 py-16 text-white shadow-[0_32px_80px_rgba(0,0,0,0.24)] scroll-mt-24 sm:mx-6 sm:px-6 sm:py-20 lg:rounded-[4rem] lg:py-32">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,191,99,0.1),transparent_70%)] opacity-70" />
 
           <div className="mx-auto max-w-7xl relative z-20">
-            <div className="text-center mb-24 space-y-4">
+            <div className="mb-10 space-y-4 text-center sm:mb-14 lg:mb-24">
               <Badge className="bg-brand-primary text-white rounded-full px-4 py-1.5 font-black uppercase text-[10px] tracking-[0.2em] border-none">
                 The Synthetic Squad
               </Badge>
-              <h2 className="text-5xl md:text-7xl font-black tracking-tighter leading-none text-white">
+              <h2 className="text-4xl font-black leading-none tracking-tighter text-white sm:text-5xl md:text-7xl">
                 Enter the <span className="text-brand-primary">Agents Hub.</span>
               </h2>
-              <p className="mx-auto max-w-2xl text-lg font-semibold text-white/40 leading-relaxed">
+              <p className="mx-auto max-w-2xl text-base font-semibold leading-relaxed text-white/40 sm:text-lg">
                 One live follow-up agent today, with more specialized agents coming next.
               </p>
             </div>
@@ -240,21 +240,21 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                 <div
                   key={agent.id}
                   className={cn(
-                    "group relative h-full flex flex-col p-1 rounded-[2.5rem] transition-all duration-500",
+                    "group relative flex h-full flex-col rounded-[1.75rem] p-1 transition-all duration-500 sm:rounded-[2.1rem] lg:rounded-[2.5rem]",
                     agent.status === "active" ? "bg-gradient-to-br from-brand-primary/20 via-white/5 to-white/5 hover:scale-[1.02]" : "bg-gradient-to-br from-white/10 to-white/5 hover:scale-[1.02]"
                   )}
                   onClick={() => agent.status === "active" && setSelectedAgent(agent)}
                 >
-                  <div className="relative flex-1 bg-brand-dark/70 rounded-[2.35rem] p-10 flex flex-col justify-between overflow-hidden border border-white/5">
+                  <div className="relative flex flex-1 flex-col justify-between overflow-hidden rounded-[1.5rem] border border-white/5 bg-brand-dark/70 p-5 sm:rounded-[2rem] sm:p-7 lg:rounded-[2.35rem] lg:p-10">
                     {agent.status === "active" && (
                       <div className="absolute -right-20 -bottom-20 h-60 w-60 rounded-full bg-brand-primary/15 blur-[44px] group-hover:bg-brand-primary/20 transition-colors" />
                     )}
 
                     <div className={cn(agent.status === "active" && "transition-opacity duration-200 group-hover:opacity-15")}>
-                      <div className="flex justify-between items-start mb-10">
+                      <div className="mb-8 flex items-start justify-between sm:mb-10">
                         <div
                           className={cn(
-                            "h-16 w-16 rounded-2xl flex items-center justify-center text-4xl shadow-2xl transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3",
+                            "flex h-14 w-14 items-center justify-center rounded-2xl text-3xl shadow-2xl transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 sm:h-16 sm:w-16 sm:text-4xl",
                             agent.status === "active" ? "bg-brand-primary text-white" : "bg-white/5 text-white/20"
                           )}
                         >
@@ -274,12 +274,12 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                         )}
                       </div>
 
-                      <h3 className="text-3xl font-black text-white mb-4 tracking-tight transition-colors group-hover:text-brand-primary">{agent.name}</h3>
-                      <p className="text-white/60 font-semibold leading-relaxed text-sm mb-8">{agent.desc}</p>
+                      <h3 className="mb-3 text-2xl font-black tracking-tight text-white transition-colors group-hover:text-brand-primary sm:mb-4 sm:text-3xl">{agent.name}</h3>
+                      <p className="mb-6 text-sm font-semibold leading-relaxed text-white/60 sm:mb-8">{agent.desc}</p>
                     </div>
 
                     <div className={cn(
-                      "flex items-center justify-between pt-8 border-t border-white/5",
+                      "flex items-center justify-between border-t border-white/5 pt-6 sm:pt-8",
                       agent.status === "active" && "transition-opacity duration-200 group-hover:opacity-15"
                     )}>
                       <div className="flex -space-x-2">
@@ -314,8 +314,8 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                 </div>
               ))}
 
-              <div className="group relative h-full flex flex-col p-1 rounded-[2.5rem] bg-gradient-to-br from-white/5 to-transparent hover:from-white/10 transition-all duration-700">
-                <div className="relative flex-1 bg-[#0a0a0a]/78 rounded-[2.35rem] p-10 flex flex-col items-center justify-center text-center overflow-hidden border border-white/5">
+              <div className="group relative flex h-full flex-col rounded-[1.75rem] bg-gradient-to-br from-white/5 to-transparent p-1 transition-all duration-700 hover:from-white/10 sm:rounded-[2.1rem] lg:rounded-[2.5rem]">
+                <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden rounded-[1.5rem] border border-white/5 bg-[#0a0a0a]/78 p-6 text-center sm:rounded-[2rem] sm:p-8 lg:rounded-[2.35rem] lg:p-10">
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border border-white/[0.03] rounded-full animate-pulse-glow" style={{ animationDuration: "5.5s" }} />
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-white/[0.05] rounded-full animate-float" style={{ animationDuration: "6s" }} />
 
@@ -350,8 +350,8 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
               </div>
             </div>
 
-            <div className="mt-20 flex justify-center">
-              <div className="px-8 py-3 rounded-full border border-white/5 bg-white/[0.02]">
+            <div className="mt-10 flex justify-center sm:mt-14 lg:mt-20">
+              <div className="rounded-full border border-white/5 bg-white/[0.02] px-5 py-3 sm:px-8">
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/30 text-center">
                   More specialized agents <span className="text-brand-primary">coming soon...</span>
                 </p>
@@ -360,27 +360,27 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
           </div>
         </section>
 
-        <section id="pricing" className="mt-8 px-6 pb-28 lg:mt-12">
+        <section id="pricing" className="mt-6 px-4 pb-16 sm:mt-8 sm:px-6 sm:pb-20 lg:mt-12 lg:pb-28">
           <div className="mx-auto max-w-7xl">
-            <div className="mb-12 text-center">
+            <div className="mb-8 text-center sm:mb-12">
               <Badge className="bg-brand-primary/10 text-brand-primary rounded-full px-4 py-1.5 font-black uppercase text-[10px] tracking-[0.2em] border-none">
                 Pricing
               </Badge>
-              <h2 className="mt-4 text-4xl font-black tracking-tight text-brand-heading md:text-5xl">
+              <h2 className="mt-4 text-3xl font-black tracking-tight text-brand-heading sm:text-4xl md:text-5xl">
                 Choose your follow-up coverage.
               </h2>
-              <p className="mx-auto mt-4 max-w-2xl text-lg font-medium text-brand-body/60">
+              <p className="mx-auto mt-4 max-w-2xl text-base font-medium text-brand-body/60 sm:text-lg">
                 Start with the Gmail Follow-up Agent today. More sales agents will be available as separate subscriptions.
               </p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-1">
               {AGENTS.filter((agent) => agent.status === "active").map((agent) => (
-                <Card key={agent.id} className="rounded-[2.5rem] border-gray-100 p-8 shadow-xl shadow-gray-200/40">
-                  <div className="flex items-start justify-between gap-4">
+                <Card key={agent.id} className="rounded-[1.75rem] border-gray-100 p-5 shadow-xl shadow-gray-200/40 sm:rounded-[2.2rem] sm:p-8 lg:rounded-[2.5rem]">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-3xl">{agent.icon}</p>
-                      <h3 className="mt-4 text-3xl font-black tracking-tight text-brand-heading">{agent.name}</h3>
+                      <h3 className="mt-3 text-2xl font-black tracking-tight text-brand-heading sm:mt-4 sm:text-3xl">{agent.name}</h3>
                       <p className="mt-3 max-w-md text-sm font-medium leading-relaxed text-brand-body/65">
                         {agent.desc}
                       </p>
@@ -399,13 +399,13 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                     ))}
                   </div>
 
-                  <div className="mt-8 flex items-end justify-between border-t border-gray-100 pt-6">
+                  <div className="mt-6 flex flex-col gap-5 border-t border-gray-100 pt-5 sm:mt-8 sm:flex-row sm:items-end sm:justify-between sm:pt-6">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/40">Price</p>
-                      <p className="mt-2 text-4xl font-black text-brand-heading">₹99<span className="text-lg text-brand-body/50">/month</span></p>
+                      <p className="mt-2 text-3xl font-black text-brand-heading sm:text-4xl">₹99<span className="text-base text-brand-body/50 sm:text-lg">/month</span></p>
                     </div>
                     <Link href={isAuthenticated ? "/agents" : "/sign-up"}>
-                      <Button className="rounded-full px-8 font-black shadow-xl shadow-brand-primary/20">
+                      <Button className="w-full rounded-full px-8 font-black shadow-xl shadow-brand-primary/20 sm:w-auto">
                         Get started →
                       </Button>
                     </Link>
@@ -416,29 +416,29 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
           </div>
         </section>
 
-        <section id="how-it-works" className="relative px-6 py-32 bg-white">
+        <section id="how-it-works" className="relative bg-white px-4 py-16 sm:px-6 sm:py-20 lg:py-32">
           <div className="mx-auto max-w-7xl">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-              <div className="space-y-8">
+            <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-20">
+              <div className="space-y-6 sm:space-y-8">
                 <Badge className="bg-brand-primary/10 text-brand-primary rounded-full px-4 py-1.5 font-black uppercase text-[10px] tracking-[0.2em] border-none">
                   The Workflow
                 </Badge>
-                <h2 className="text-5xl md:text-6xl font-black tracking-[calc(-0.02em)] leading-[1.05] text-brand-heading">
+                <h2 className="text-3xl font-black leading-[1.05] tracking-[calc(-0.02em)] text-brand-heading sm:text-4xl md:text-5xl lg:text-6xl">
                   Intelligent monitoring <br />
                   across your <span className="text-brand-primary">core channels.</span>
                 </h2>
-                <div className="space-y-12 pt-8">
+                <div className="space-y-6 pt-2 sm:space-y-8 sm:pt-4 lg:space-y-12 lg:pt-8">
                   {[
                     { title: "Dedicated Gmail Agent", desc: "Connect the Gmail Follow-up Agent to monitor sales inbox activity and surface quiet leads automatically.", icon: "🔌" },
                     { title: "Quiet Lead Detection", desc: "The agent tracks conversation history, detects silence, and prepares contextual follow-up drafts from the actual thread.", icon: "🧠" },
                     { title: "Review And Send", desc: "Review the draft, make edits if needed, and reply through Gmail directly from the dashboard.", icon: "✨" }
                   ].map((item, i) => (
-                    <div key={i} className="flex gap-6 items-start group">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gray-50 border border-gray-100 text-xl group-hover:bg-brand-primary/10 group-hover:border-brand-primary/30 transition-all duration-300">
+                    <div key={i} className="group flex items-start gap-4 sm:gap-6">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 text-lg transition-all duration-300 group-hover:border-brand-primary/30 group-hover:bg-brand-primary/10 sm:h-12 sm:w-12 sm:text-xl">
                         {item.icon}
                       </div>
                       <div>
-                        <h4 className="text-xl font-black mb-2 text-brand-heading group-hover:text-brand-primary transition-colors">{item.title}</h4>
+                        <h4 className="mb-2 text-lg font-black text-brand-heading transition-colors group-hover:text-brand-primary sm:text-xl">{item.title}</h4>
                         <p className="text-brand-body/60 leading-relaxed font-semibold">{item.desc}</p>
                       </div>
                     </div>
@@ -446,11 +446,11 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                 </div>
               </div>
 
-              <div className="relative aspect-square rounded-[3.5rem] border border-gray-100 bg-gray-50/50 p-1 flex items-center justify-center group overflow-hidden shadow-xl">
+              <div className="group relative aspect-square overflow-hidden rounded-[2.2rem] border border-gray-100 bg-gray-50/50 p-1 shadow-xl sm:rounded-[3rem] lg:rounded-[3.5rem]">
                 <div className="absolute inset-0 bg-brand-primary/5 blur-3xl group-hover:bg-brand-primary/10 transition-colors" />
-                <div className="relative w-full h-full rounded-[3.3rem] bg-white flex items-center justify-center p-8">
+                <div className="relative flex h-full w-full items-center justify-center rounded-[2rem] bg-white p-5 sm:rounded-[2.8rem] sm:p-6 lg:rounded-[3.3rem] lg:p-8">
                   <div className="w-full space-y-6">
-                    <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 animate-float shadow-sm">
+                    <div className="animate-float rounded-2xl border border-gray-100 bg-gray-50 p-4 shadow-sm sm:p-6">
                       <div className="flex justify-between items-center mb-4">
                         <div className="h-4 w-32 bg-gray-200 rounded-full" />
                         <Badge className="bg-brand-primary text-[8px] px-3 font-black text-white">READY</Badge>
@@ -460,7 +460,7 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                         <div className="h-2 w-2/3 bg-gray-100 rounded-full" />
                       </div>
                     </div>
-                    <div className="bg-white rounded-2xl p-6 border border-brand-primary/20 animate-float delay-700 translate-x-10 shadow-xl relative z-10">
+                    <div className="relative z-10 translate-x-4 animate-float rounded-2xl border border-brand-primary/20 bg-white p-4 shadow-xl delay-700 sm:translate-x-8 sm:p-6 lg:translate-x-10">
                       <div className="flex justify-between items-center mb-4">
                         <div className="h-4 w-24 bg-brand-primary/10 rounded-full" />
                         <Badge className="bg-blue-500 text-[8px] px-3 font-black text-white">DRAFTING</Badge>
@@ -481,11 +481,11 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
         </section>
       </main>
 
-      <Dialog open={!!selectedAgent} onClose={() => setSelectedAgent(null)} contentClassName="max-w-4xl p-0 overflow-hidden rounded-[3rem]">
+      <Dialog open={!!selectedAgent} onClose={() => setSelectedAgent(null)} contentClassName="max-w-4xl overflow-hidden rounded-[2rem] p-0 sm:rounded-[3rem]">
         {selectedAgent && (
-          <div className="flex flex-col md:flex-row min-h-[500px]">
-            <div className={cn("md:w-72 p-12 flex flex-col items-center justify-center text-white relative", selectedAgent.status === "active" ? "bg-brand-dark" : "bg-brand-primary")}>
-              <div className="text-9xl animate-float mb-8 drop-shadow-2xl">
+          <div className="flex min-h-[500px] flex-col md:flex-row">
+            <div className={cn("relative flex flex-col items-center justify-center p-8 text-white md:w-72 md:p-12", selectedAgent.status === "active" ? "bg-brand-dark" : "bg-brand-primary")}>
+              <div className="mb-6 animate-float text-7xl drop-shadow-2xl sm:mb-8 sm:text-9xl">
                 {selectedAgent.icon}
               </div>
               <div className="text-center">
@@ -494,10 +494,10 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
               </div>
             </div>
 
-            <div className="flex-1 bg-white p-12 relative">
+            <div className="relative flex-1 bg-white p-6 sm:p-8 md:p-12">
               <button
                 onClick={() => setSelectedAgent(null)}
-                className="absolute right-8 top-8 h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 transition-colors hover:bg-gray-100 sm:right-8 sm:top-8"
               >
                 <svg className="h-5 w-5 text-brand-body/40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
@@ -506,8 +506,8 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                 <Badge className={cn("mb-6 px-4 py-1 font-black uppercase border-none text-[10px] tracking-widest", selectedAgent.status === "active" ? "bg-brand-primary/10 text-brand-primary" : "bg-amber-100 text-amber-600")}>
                   {selectedAgent.status === "active" ? "Operational Status: 100%" : "Current Phase: Beta Lab"}
                 </Badge>
-                <h3 className="text-4xl font-black text-brand-heading mb-6 tracking-tight">{selectedAgent.name}</h3>
-                <p className="text-lg font-medium text-brand-body/70 leading-relaxed mb-10">
+                <h3 className="mb-5 text-3xl font-black tracking-tight text-brand-heading sm:mb-6 sm:text-4xl">{selectedAgent.name}</h3>
+                <p className="mb-8 text-base font-medium leading-relaxed text-brand-body/70 sm:mb-10 sm:text-lg">
                   {selectedAgent.longDesc}
                 </p>
 
@@ -545,13 +545,13 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
         )}
       </Dialog>
 
-      <Dialog open={showSuggestSkillModal} onClose={() => setShowSuggestSkillModal(false)} contentClassName="max-w-md bg-[#0a0a0a] border-white/10 rounded-[2.5rem] p-10">
+      <Dialog open={showSuggestSkillModal} onClose={() => setShowSuggestSkillModal(false)} contentClassName="max-w-md rounded-[2rem] border-white/10 bg-[#0a0a0a] p-6 sm:rounded-[2.5rem] sm:p-10">
         <div className="space-y-6">
           <div className="space-y-2">
             <Badge className="bg-brand-primary/20 text-brand-primary rounded-full px-4 py-1.5 font-black uppercase text-[10px] tracking-[0.2em] border border-brand-primary/30 w-fit">
               Co-creation Lab
             </Badge>
-            <h3 className="text-3xl font-black text-white tracking-tight">Suggest a Skill</h3>
+            <h3 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Suggest a Skill</h3>
             <p className="text-white/60 font-semibold text-sm leading-relaxed">
               Tell us what other sales automated agents you&apos;d like to see.
             </p>
@@ -580,7 +580,7 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
               </div>
             </div>
 
-            <div className="flex gap-4 pt-4">
+            <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:gap-4">
               <Button type="button" variant="ghost" onClick={() => setShowSuggestSkillModal(false)} className="flex-1 h-14 rounded-2xl font-black text-white/50 hover:text-white hover:bg-white/5">
                 Cancel
               </Button>
@@ -598,9 +598,9 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
         </div>
       </Dialog>
 
-      <footer className="bg-white border-t border-gray-100 px-6 py-20 pb-10">
+      <footer className="border-t border-gray-100 bg-white px-4 py-12 pb-8 sm:px-6 sm:py-16 sm:pb-10 lg:py-20">
         <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col md:flex-row justify-between items-start gap-12 mb-20">
+          <div className="mb-10 flex flex-col items-start justify-between gap-10 sm:mb-14 md:flex-row lg:mb-20">
             <div className="space-y-6">
               <Link href="/" className="flex items-center gap-2.5">
                 <div className="relative h-6 w-6 overflow-hidden rounded-lg bg-brand-primary p-1">
@@ -611,7 +611,7 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
               <p className="max-w-xs text-brand-body/60 font-medium">The intelligent multi-agent platform for modern revenue teams. Scale intelligence, not headcount.</p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-16">
+            <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 sm:gap-16">
               <div className="space-y-4">
                 <h4 className="text-xs font-black uppercase tracking-widest text-brand-heading">Platform</h4>
                 <ul className="space-y-2 text-sm font-bold text-brand-body/60">

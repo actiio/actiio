@@ -102,7 +102,7 @@ export function AgentLayout({
         </div>
       </aside>
 
-      <header className="border-b border-gray-100 bg-white/80 px-6 py-4 backdrop-blur lg:fixed lg:left-64 lg:right-0 lg:top-0 lg:z-10">
+      <header className="border-b border-gray-100 bg-white/80 px-4 py-4 backdrop-blur sm:px-6 lg:fixed lg:left-64 lg:right-0 lg:top-0 lg:z-10">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div>
@@ -124,6 +124,22 @@ export function AgentLayout({
             )}
           </div>
         </div>
+        <nav className="mt-3 grid grid-cols-2 gap-2 lg:hidden">
+          {navItems.map((item) => (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={cn(
+                "rounded-xl px-4 py-3 text-center text-sm font-semibold transition-colors",
+                activePath === item.key
+                  ? "bg-brand-primary/10 text-brand-primary"
+                  : "bg-gray-50 text-brand-body/70 hover:bg-gray-100 hover:text-brand-heading"
+              )}
+            >
+              {item.key === "dashboard" ? "Leads" : item.label}
+            </Link>
+          ))}
+        </nav>
       </header>
 
       <main className="px-4 py-6 lg:px-8 lg:pt-24">{children}</main>
