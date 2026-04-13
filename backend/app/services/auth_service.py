@@ -9,6 +9,25 @@ supabase = get_supabase()
 logger = logging.getLogger(__name__)
 
 
+def _extract_error_text(error: Exception) -> str:
+    parts: list[str] = []
+
+    for attr in ("message", "detail", "code"):
+        value = getattr(error, attr, None)
+        if value:
+            parts.append(str(value))
+
+    response = getattr(error, "response", None)
+    if response is not None:
+        for attr in ("text", "content"):
+            value = getattr(response, attr, None)
+            if value:
+                parts.append(str(value))
+
+    parts.append(str(error))
+    return " ".join(part for part in parts if part).lower()
+
+
 def sign_up(email: str, password: str) -> dict:
     # Use Supabase Admin to create the user.
     # This prevents the default Supabase email from being sent.
@@ -36,17 +55,22 @@ def sign_up(email: str, password: str) -> dict:
         # This matches the 'Confirm Email: ON' behavior.
         return {"message": "Please check your email to confirm your account."}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Sign up failure: %s", e)
-        error_text = str(e).lower()
+        error_text = _extract_error_text(e)
         duplicate_phrases = [
-            "already registered", 
-            "already exists", 
+            "already registered",
+            "already exists",
             "already in use",
             "duplicate key",
             "unique constraint",
             "email exists",
-            "email already"
+            "email already",
+            "user already exists",
+            "email address has already been registered",
+            "email address is already registered",
         ]
         if any(p in error_text for p in duplicate_phrases):
             detail = "An account with this email already exists. Please sign in instead."
