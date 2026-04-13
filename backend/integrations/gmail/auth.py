@@ -30,6 +30,10 @@ class GmailConnectionExpiredError(Exception):
     """Raised when a stored Gmail OAuth connection can no longer be refreshed."""
 
 
+class GmailMissingScopesError(Exception):
+    """Raised when Google OAuth completes without all required Gmail scopes."""
+
+
 def _to_aware_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
@@ -127,12 +131,32 @@ def _mark_connection_disconnected(connection_id: str) -> None:
     )
 
 
+def _normalize_scope_values(scope_value: str | None) -> set[str]:
+    if not scope_value:
+        return set()
+    return {scope.strip() for scope in scope_value.split(" ") if scope.strip()}
+
+
+def _validate_granted_scopes(credentials: Credentials) -> None:
+    granted_scopes = set(credentials.scopes or [])
+    granted_scopes.update(_normalize_scope_values(getattr(credentials, "granted_scopes", None)))
+    granted_scopes.update(_normalize_scope_values(getattr(credentials, "scope", None)))
+    required_scopes = {
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send",
+    }
+    missing_scopes = sorted(scope for scope in required_scopes if scope not in granted_scopes)
+    if missing_scopes:
+        raise GmailMissingScopesError(f"Missing required Gmail scopes: {', '.join(missing_scopes)}")
+
+
 def handle_callback(code: str, user_id: str, agent_id: str = "gmail_followup") -> Dict:
     settings = get_settings()
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=settings.google_redirect_uri)
     flow.fetch_token(code=code)
 
     credentials = flow.credentials
+    _validate_granted_scopes(credentials)
     token_expiry = _to_aware_utc(credentials.expiry).isoformat() if credentials.expiry else None
 
     gmail_email, display_name = _fetch_google_userinfo(credentials.token)

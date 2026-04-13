@@ -267,8 +267,12 @@ export function SettingsClient({
       pushToast("Gmail connected successfully.");
     } else if (gmailError === "cancelled") {
       pushToast("Gmail connection was cancelled.", "error");
+    } else if (gmailError === "missing_scopes") {
+      pushToast("Please allow both Gmail permissions to connect your account.", "error");
     } else if (gmailError === "missing_code") {
       pushToast("Gmail connection could not be completed. Please try again.", "error");
+    } else if (gmailError === "callback_failed") {
+      pushToast("Failed to connect Gmail account. Please try again.", "error");
     }
 
     const cleanUrl = new URL(window.location.href);

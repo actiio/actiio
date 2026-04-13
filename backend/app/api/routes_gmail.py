@@ -16,7 +16,14 @@ from app.core.rate_limit import enforce_send_quota
 from app.core.sanitization import sanitize_payload
 from app.core.supabase import get_supabase
 from app.core.utils import raise_internal_error
-from integrations.gmail.auth import GmailConnectionExpiredError, get_auth_url, get_credentials, handle_callback, parse_state
+from integrations.gmail.auth import (
+    GmailConnectionExpiredError,
+    GmailMissingScopesError,
+    get_auth_url,
+    get_credentials,
+    handle_callback,
+    parse_state,
+)
 from integrations.gmail.sender import send_gmail
 from integrations.gmail.sync import initial_sync
 from integrations.gmail.sync import initial_sync
@@ -190,12 +197,25 @@ def gmail_callback(
     try:
         handle_callback(code=code, user_id=parsed_user_id, agent_id=agent_id)
         background_tasks.add_task(_run_initial_sync_after_connect, parsed_user_id, agent_id)
+    except GmailMissingScopesError as exc:
+        logger.info(
+            "Gmail OAuth missing scopes for user %s (%s): %s",
+            parsed_user_id,
+            agent_id,
+            exc,
+        )
+        return RedirectResponse(
+            url=_build_gmail_settings_redirect(agent_id, gmail_error="missing_scopes")
+        )
     except Exception as exc:
-        raise_internal_error(
-            logger,
-            message="Failed to complete Gmail OAuth callback",
-            exc=exc,
-            detail="Failed to connect Gmail account.",
+        logger.exception(
+            "Failed to complete Gmail OAuth callback for user %s (%s)",
+            parsed_user_id,
+            agent_id,
+            exc_info=exc,
+        )
+        return RedirectResponse(
+            url=_build_gmail_settings_redirect(agent_id, gmail_error="callback_failed")
         )
     return RedirectResponse(url=_build_gmail_settings_redirect(agent_id, gmail_connected=True))
 
