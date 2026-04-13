@@ -352,6 +352,9 @@ CREATE TABLE IF NOT EXISTS public.processed_webhooks (
 CREATE INDEX IF NOT EXISTS idx_processed_webhooks_time
   ON public.processed_webhooks(processed_at);
 
+COMMENT ON TABLE public.processed_webhooks IS 
+'Webhook idempotency tracking. Intentionally has no user-facing RLS policies. Only accessible via service role key server-side.';
+
 -- =============================================
 -- Suggested Skills
 -- =============================================
@@ -378,6 +381,7 @@ alter table public.agents enable row level security;
 alter table public.user_subscriptions enable row level security;
 alter table public.agent_waitlist enable row level security;
 alter table public.suggested_skills enable row level security;
+alter table public.processed_webhooks enable row level security;
 
 -- Policies for Agents & Subscriptions
 drop policy if exists "agents_select_all" on public.agents;
