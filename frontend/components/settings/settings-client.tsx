@@ -167,6 +167,7 @@ export function SettingsClient({
   const [salesAssets, setSalesAssets] = useState<SalesAsset[]>([]);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailSyncing, setGmailSyncing] = useState(false);
+  const [gmailLastSyncedAt, setGmailLastSyncedAt] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -176,6 +177,7 @@ export function SettingsClient({
   const { pushToast } = useToast();
   const hasLoadedProfileRef = useRef(false);
   const lastSavedPayloadRef = useRef<string | null>(null);
+  const autoSyncAttemptedRef = useRef<string | null>(null);
 
   const settingsPayload = useMemo(
     () => ({
@@ -241,8 +243,9 @@ export function SettingsClient({
 
         try {
           if (isGmailAgent(agentId)) {
-            const gmail = await apiFetch<{ connected: boolean }>("/api/gmail/status?agent_id=" + agentId);
+            const gmail = await apiFetch<{ connected: boolean; last_synced_at?: string | null }>("/api/gmail/status?agent_id=" + agentId);
             setGmailConnected(gmail.connected);
+            setGmailLastSyncedAt(gmail.last_synced_at || null);
           }
         } catch (err) { }
 
@@ -280,6 +283,35 @@ export function SettingsClient({
     cleanUrl.searchParams.delete("gmail_error");
     window.history.replaceState({}, "", cleanUrl.toString());
   }, [pushToast, searchParams]);
+
+  useEffect(() => {
+    const gmailConnectedParam = searchParams.get("gmail_connected");
+    const shouldAutoSync =
+      isGmailAgent(agentId) &&
+      gmailConnected &&
+      !gmailSyncing &&
+      (!gmailLastSyncedAt || gmailConnectedParam === "1");
+
+    if (!shouldAutoSync || autoSyncAttemptedRef.current === agentId) {
+      return;
+    }
+
+    autoSyncAttemptedRef.current = agentId;
+    setGmailSyncing(true);
+
+    void (async () => {
+      try {
+        const result = await syncGmail(agentId);
+        setGmailLastSyncedAt(result.last_synced_at || null);
+        pushToast("Gmail connected and inbox synced.");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Gmail sync failed.";
+        pushToast(message, "error");
+      } finally {
+        setGmailSyncing(false);
+      }
+    })();
+  }, [agentId, gmailConnected, gmailLastSyncedAt, gmailSyncing, pushToast, searchParams]);
 
   async function save(showToast = true) {
     const validationMessage = getProfileValidationMessage(form);
@@ -360,7 +392,8 @@ export function SettingsClient({
 
     setGmailSyncing(true);
     try {
-      await syncGmail(agentId);
+      const result = await syncGmail(agentId);
+      setGmailLastSyncedAt(result.last_synced_at || null);
       pushToast("Gmail sync complete.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gmail sync failed.";

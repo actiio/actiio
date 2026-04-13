@@ -235,6 +235,16 @@ function buildSyncToastMessage(data: { leads_found: number; updated_threads: num
   return `Sync complete. ${parts.join(" and ")}.`;
 }
 
+function emptyStateCtaLabel(agentId: string, gmailStatus: "connected" | "disconnected" | null) {
+  if (!isGmailAgent(agentId)) {
+    return getAgentMeta(agentId).emptyStateCta;
+  }
+  if (gmailStatus === "connected") {
+    return "Sync Gmail";
+  }
+  return "Connect Gmail";
+}
+
 export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: string }) {
   const meta = getAgentMeta(agentId);
   const { pushToast } = useToast();
@@ -908,10 +918,22 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
                   No leads tracked yet.
                 </h3>
                 <p className="mt-2 max-w-md text-brand-body/60">
-                  Connect Gmail and sync your inbox to start tracking quiet sales threads.
+                  {gmailStatus === "connected"
+                    ? "Your Gmail account is connected. Run a sync to pull in recent sales threads and start tracking quiet leads."
+                    : "Connect Gmail and sync your inbox to start tracking quiet sales threads."}
                 </p>
-                <Button className="mt-8" onClick={() => { window.location.href = `/agents/${agentId}/settings`; }}>
-                  {meta.emptyStateCta}
+                <Button
+                  className="mt-8"
+                  onClick={() => {
+                    if (gmailStatus === "connected") {
+                      void syncLeads();
+                      return;
+                    }
+                    window.location.href = `/agents/${agentId}/settings`;
+                  }}
+                  disabled={isSyncing}
+                >
+                  {isSyncing ? "Syncing..." : emptyStateCtaLabel(agentId, gmailStatus)}
                 </Button>
               </>
             )}
