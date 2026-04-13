@@ -539,9 +539,13 @@ async def payment_webhook(request: Request):
 
     # --- Replay protection: reject requests with stale timestamps (>5 min) ---
     try:
-        ts_value = int(timestamp)
-        if abs(int(time.time()) - ts_value) > 300:
-            logger.warning("Webhook rejected: stale timestamp %s", timestamp)
+        ts_value = float(timestamp)
+        # If timestamp is in milliseconds (length usually > 10 digits), convert to seconds
+        if ts_value > 1e11:
+            ts_value = ts_value / 1000.0
+            
+        if abs(time.time() - ts_value) > 300:
+            logger.warning("Webhook rejected: stale timestamp %s (current time: %f)", timestamp, time.time())
             raise HTTPException(status_code=400, detail="Webhook timestamp too old.")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid webhook timestamp format.")
