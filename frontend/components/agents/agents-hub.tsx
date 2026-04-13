@@ -468,6 +468,16 @@ export function AgentsHub() {
 
       <main className="px-4 py-5 sm:py-6 lg:px-8">
         <div className="mx-auto max-w-7xl space-y-6 lg:space-y-8 lg:pt-4">
+          <div className="flex items-center justify-between gap-3 lg:hidden">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-brand-body/70 shadow-sm transition-colors hover:bg-gray-50 hover:text-brand-heading"
+            >
+              <span aria-hidden="true">←</span>
+              <span>Home</span>
+            </Link>
+          </div>
+
           {/* Expiry warning banner */}
           {expiringAgents.map(({ agentId, daysRemaining }) => (
             <div
