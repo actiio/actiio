@@ -16,6 +16,7 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.services.auth_service import request_password_reset, sign_in, sign_up
+from services.email_service import send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -115,6 +116,8 @@ def forgot_password_route(
     request: Request,
     background_tasks: BackgroundTasks,
 ):
+    from fastapi import HTTPException
+    
     safe_email = sanitize_email(payload.email)
     enforce_auth_attempt_limit(
         request=request,
@@ -123,7 +126,36 @@ def forgot_password_route(
         per_email_ip_limit=settings.auth_attempt_limit_per_15min,
         per_email_ip_window_seconds=15 * 60,
     )
+    
     # Redirect back to the frontend reset-password page
     redirect_to = f"{settings.frontend_url}/reset-password"
-    background_tasks.add_task(request_password_reset, safe_email, redirect_to)
-    return {"message": "If that email exists, a reset link has been sent."}
+    
+    try:
+        # Check existence by generating the recovery link synchronously.
+        # This allows us to return a 404 if the user doesn't exist.
+        res = supabase.auth.admin.generate_link({
+            "type": "recovery",
+            "email": safe_email,
+            "options": {"redirect_to": redirect_to}
+        })
+        
+        if res.properties and res.properties.action_link:
+            # User exists, queue the email delivery
+            background_tasks.add_task(send_password_reset_email, safe_email, res.properties.action_link)
+            return {"message": "A reset link has been sent to your email."}
+        else:
+            # Fallback to standard Supabase reset if somehow the link wasn't returned
+            background_tasks.add_task(request_password_reset, safe_email, redirect_to)
+            return {"message": "If that email exists, a reset link has been sent."}
+            
+    except Exception as e:
+        # If Supabase returns 'User not found', we explicitly tell the user.
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail="No account found with this email.")
+            
+        # For other errors, log and fallback to the generic background task
+        import logging
+        logging.getLogger(__name__).error(f"Password reset request failed for {safe_email}: {e}")
+        background_tasks.add_task(request_password_reset, safe_email, redirect_to)
+        return {"message": "If that email exists, a reset link has been sent."}
+
