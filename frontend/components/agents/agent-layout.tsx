@@ -124,6 +124,21 @@ export function AgentLayout({
             )}
           </div>
         </div>
+        <div className="mt-3 flex items-center justify-between gap-3 lg:hidden">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-brand-body/70 transition-colors hover:bg-gray-100 hover:text-brand-heading"
+          >
+            <span aria-hidden="true">←</span>
+            <span>Home</span>
+          </Link>
+          <Link
+            href="/agents"
+            className="inline-flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm font-semibold text-brand-body/70 transition-colors hover:bg-gray-100 hover:text-brand-heading"
+          >
+            <span>Agents Hub</span>
+          </Link>
+        </div>
         <nav className="mt-3 grid grid-cols-2 gap-2 lg:hidden">
           {navItems.map((item) => (
             <Link
