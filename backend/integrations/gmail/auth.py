@@ -138,9 +138,15 @@ def _normalize_scope_values(scope_value: str | None) -> set[str]:
 
 
 def _validate_granted_scopes(credentials: Credentials) -> None:
-    granted_scopes = set(credentials.scopes or [])
-    granted_scopes.update(_normalize_scope_values(getattr(credentials, "granted_scopes", None)))
+    granted_scopes = set(credentials.granted_scopes or [])
     granted_scopes.update(_normalize_scope_values(getattr(credentials, "scope", None)))
+
+    # Some OAuth responses do not populate granted_scopes explicitly.
+    # Fall back to credentials.scopes only when Google did not return
+    # a separate granted scope list at all.
+    if not granted_scopes:
+        granted_scopes.update(credentials.scopes or [])
+
     required_scopes = {
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/gmail.send",
