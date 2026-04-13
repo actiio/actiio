@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Actiio Backend"
-    app_env: str = "development"
+    app_env: str = "production"
     api_prefix: str = "/api"
 
     supabase_url: str
@@ -67,7 +67,15 @@ class Settings(BaseSettings):
 
     @property
     def state_signing_secret(self) -> str:
-        return self.app_secret_key or self.supabase_service_key
+        if not self.app_secret_key:
+            if self.app_env != "development":
+                raise ValueError(
+                    "APP_SECRET_KEY must be set in non-development environments. "
+                    "Generate a strong random secret and set it in your .env file."
+                )
+            # Development-only fallback — never used in production.
+            return self.supabase_service_key
+        return self.app_secret_key
 
     @property
     def cashfree_base_url(self) -> str:

@@ -38,7 +38,16 @@ def sign_up(email: str, password: str) -> dict:
 
     except Exception as e:
         logger.error("Sign up failure: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+        error_text = str(e).lower()
+        if "already registered" in error_text or "already exists" in error_text:
+            detail = "An account with this email already exists. Please sign in instead."
+        elif "password" in error_text and ("weak" in error_text or "at least" in error_text or "too short" in error_text):
+            detail = "Password is too weak. Please use a stronger password."
+        elif "invalid" in error_text and "email" in error_text:
+            detail = "Please provide a valid email address."
+        else:
+            detail = "Something went wrong. Please try again."
+        raise HTTPException(status_code=400, detail=detail)
 
 
 def sign_in(email: str, password: str) -> dict:

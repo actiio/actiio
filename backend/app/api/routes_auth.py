@@ -109,6 +109,28 @@ def me(current_user=Depends(get_current_user)):
     )
 
 
+import logging as _logging
+_forgot_password_logger = _logging.getLogger(__name__)
+
+# Per-email rate limit for forgot-password: max 3 per email per hour
+_forgot_password_email_tracker: dict[str, list[float]] = {}
+_FORGOT_PASSWORD_PER_EMAIL_LIMIT = 3
+_FORGOT_PASSWORD_PER_EMAIL_WINDOW = 3600  # 1 hour
+
+def _check_forgot_password_email_limit(email: str) -> bool:
+    """Return True if the email has exceeded the per-email forgot-password limit."""
+    import time as _time
+    now = _time.time()
+    cutoff = now - _FORGOT_PASSWORD_PER_EMAIL_WINDOW
+    timestamps = _forgot_password_email_tracker.get(email, [])
+    timestamps = [t for t in timestamps if t > cutoff]
+    _forgot_password_email_tracker[email] = timestamps
+    if len(timestamps) >= _FORGOT_PASSWORD_PER_EMAIL_LIMIT:
+        return True
+    timestamps.append(now)
+    return False
+
+
 @router.post("/forgot-password")
 @limiter.limit("5/minute", key_func=get_remote_address)
 def forgot_password_route(
@@ -116,8 +138,6 @@ def forgot_password_route(
     request: Request,
     background_tasks: BackgroundTasks,
 ):
-    from fastapi import HTTPException
-    
     safe_email = sanitize_email(payload.email)
     enforce_auth_attempt_limit(
         request=request,
@@ -126,36 +146,37 @@ def forgot_password_route(
         per_email_ip_limit=settings.auth_attempt_limit_per_15min,
         per_email_ip_window_seconds=15 * 60,
     )
-    
+
+    # Generic response — never reveal whether the email exists.
+    generic_response = {"message": "If an account exists with this email, you will receive a password reset link shortly."}
+
+    # Per-email rate limit: max 3 reset requests per email per hour.
+    if _check_forgot_password_email_limit(safe_email):
+        _forgot_password_logger.info("Forgot-password per-email rate limit hit for %s", safe_email)
+        return generic_response
+
     # Redirect back to the frontend reset-password page
     redirect_to = f"{settings.frontend_url}/reset-password"
-    
+
     try:
-        # Check existence by generating the recovery link synchronously.
-        # This allows us to return a 404 if the user doesn't exist.
         res = supabase.auth.admin.generate_link({
             "type": "recovery",
             "email": safe_email,
             "options": {"redirect_to": redirect_to}
         })
-        
+
         if res.properties and res.properties.action_link:
-            # User exists, queue the email delivery
             background_tasks.add_task(send_password_reset_email, safe_email, res.properties.action_link)
-            return {"message": "A reset link has been sent to your email."}
         else:
-            # Fallback to standard Supabase reset if somehow the link wasn't returned
             background_tasks.add_task(request_password_reset, safe_email, redirect_to)
-            return {"message": "If that email exists, a reset link has been sent."}
-            
+
     except Exception as e:
-        # If Supabase returns 'User not found', we explicitly tell the user.
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail="No account found with this email.")
-            
-        # For other errors, log and fallback to the generic background task
-        import logging
-        logging.getLogger(__name__).error(f"Password reset request failed for {safe_email}: {e}")
-        background_tasks.add_task(request_password_reset, safe_email, redirect_to)
-        return {"message": "If that email exists, a reset link has been sent."}
+        # Log the actual error internally but never expose it to the client.
+        _forgot_password_logger.error("Password reset request failed for %s: %s", safe_email, e)
+        # If user not found, still return the generic message — no information leak.
+        # For other errors, attempt fallback silently.
+        if "not found" not in str(e).lower():
+            background_tasks.add_task(request_password_reset, safe_email, redirect_to)
+
+    return generic_response
 

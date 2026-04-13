@@ -78,7 +78,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/agents/") ||
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/onboarding") ||
-    pathname.startsWith("/settings");
+    pathname.startsWith("/settings") ||
+    pathname.startsWith("/subscriptions");
 
   if (isProtected && !user) {
     const redirectUrl = request.nextUrl.clone();
@@ -97,5 +98,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/agents", "/agents/:path*", "/dashboard/:path*", "/onboarding/:path*", "/settings/:path*", "/sign-in", "/sign-up"],
+  matcher: ["/agents", "/agents/:path*", "/dashboard/:path*", "/onboarding/:path*", "/settings/:path*", "/subscriptions/:path*", "/sign-in", "/sign-up"],
 };

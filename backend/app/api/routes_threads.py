@@ -22,6 +22,25 @@ supabase = get_supabase()
 router = APIRouter(tags=["threads"])
 logger = logging.getLogger(__name__)
 
+# --- Daily draft generation rate limit: max 50 per user per day ---
+_daily_draft_tracker: dict[str, list[float]] = {}
+_DAILY_DRAFT_LIMIT = 50
+_DAILY_DRAFT_WINDOW = 86400  # 24 hours
+
+
+def _check_daily_draft_limit(user_id: str) -> bool:
+    """Return True if the user has exceeded their daily draft generation limit."""
+    import time as _time
+    now = _time.time()
+    cutoff = now - _DAILY_DRAFT_WINDOW
+    timestamps = _daily_draft_tracker.get(user_id, [])
+    timestamps = [t for t in timestamps if t > cutoff]
+    _daily_draft_tracker[user_id] = timestamps
+    if len(timestamps) >= _DAILY_DRAFT_LIMIT:
+        return True
+    timestamps.append(now)
+    return False
+
 
 def _get_current_gmail_account_email(user_id: str, agent_id: str) -> str | None:
     try:
@@ -393,6 +412,9 @@ async def generate_follow_up_for_thread(
     _=Depends(require_active_subscription),
 ):
     agent_id = validate_agent_id(agent_id)
+    # Enforce daily draft generation limit (50/day) in addition to the 30/hour slowapi limit.
+    if _check_daily_draft_limit(current_user.id):
+        raise HTTPException(status_code=429, detail="Daily draft generation limit reached. Please try again tomorrow.")
     thread_id_str = str(UUID(thread_id))
     gmail_account_email = _get_current_gmail_account_email(current_user.id, agent_id)
     thread_response = (

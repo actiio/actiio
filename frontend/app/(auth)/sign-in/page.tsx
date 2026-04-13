@@ -54,12 +54,6 @@ export default async function SignInPage(props: {
           {/* We still render AuthForm hiddenly or for its effects, or just wait for client-side to take over */}
           <AuthForm mode="sign-in" isSilent />
         </div>
-        <style dangerouslySetInnerHTML={{ __html: `
-          @keyframes loading {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(200%); }
-          }
-        `}} />
       </main>
     );
   }

@@ -309,6 +309,14 @@ CREATE TABLE IF NOT EXISTS public.user_subscriptions (
 ALTER TABLE public.user_subscriptions
   ADD COLUMN IF NOT EXISTS cashfree_transaction_id text;
 
+-- Enforce valid status values at the database level.
+ALTER TABLE public.user_subscriptions
+  DROP CONSTRAINT IF EXISTS valid_status;
+ALTER TABLE public.user_subscriptions
+  ADD CONSTRAINT valid_status CHECK (
+    status IN ('inactive', 'payment_pending', 'payment_failed', 'active', 'expired')
+  );
+
 UPDATE public.agents
   SET channel = 'gmail'
   WHERE id = 'gmail_followup';
@@ -330,6 +338,19 @@ CREATE TABLE IF NOT EXISTS public.agent_waitlist (
   created_at timestamptz not null default now(),
   unique(user_id, agent_id)
 );
+
+-- =============================================
+-- Processed Webhooks (idempotency tracking)
+-- =============================================
+CREATE TABLE IF NOT EXISTS public.processed_webhooks (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_id text NOT NULL UNIQUE,
+  processed_at timestamp with time zone DEFAULT now()
+);
+
+-- Auto-cleanup old processed webhook records after 7 days
+CREATE INDEX IF NOT EXISTS idx_processed_webhooks_time
+  ON public.processed_webhooks(processed_at);
 
 -- =============================================
 -- Suggested Skills
@@ -365,8 +386,10 @@ create policy "agents_select_all" on public.agents for select using (true);
 drop policy if exists "user_subscriptions_select_own" on public.user_subscriptions;
 create policy "user_subscriptions_select_own" on public.user_subscriptions for select using (auth.uid() = user_id);
 
+-- INSERT/DELETE on user_subscriptions intentionally restricted to service role only.
+-- All subscription writes go through the backend API, never the anon key.
+-- This prevents users from self-activating subscriptions via the client.
 drop policy if exists "user_subscriptions_insert_own" on public.user_subscriptions;
-create policy "user_subscriptions_insert_own" on public.user_subscriptions for insert with check (auth.uid() = user_id);
 
 drop policy if exists "waitlist_insert_own" on public.agent_waitlist;
 create policy "waitlist_insert_own" on public.agent_waitlist for insert with check (auth.uid() = user_id);
@@ -403,18 +426,25 @@ drop policy if exists "gmail_connections_insert_own" on public.gmail_connections
 drop policy if exists "gmail_connections_update_own" on public.gmail_connections;
 drop policy if exists "gmail_connections_delete_own" on public.gmail_connections;
 
+-- INSERT/DELETE on lead_threads intentionally restricted to service role only.
+-- All thread writes go through the backend API, never the anon key.
 drop policy if exists "lead_threads_select_own" on public.lead_threads;
 create policy "lead_threads_select_own" on public.lead_threads for select using (auth.uid() = user_id);
 
 drop policy if exists "lead_threads_update_own" on public.lead_threads;
 create policy "lead_threads_update_own" on public.lead_threads for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- INSERT/DELETE on messages intentionally restricted to service role only.
+-- All message writes go through the backend API, never the anon key.
 drop policy if exists "messages_select_own" on public.messages;
 create policy "messages_select_own" on public.messages for select using (exists (select 1 from public.lead_threads lt where lt.id = thread_id and lt.user_id = auth.uid()));
 
+-- INSERT/DELETE on thread_audits intentionally restricted to service role only.
 drop policy if exists "thread_audits_select_own" on public.thread_audits;
 create policy "thread_audits_select_own" on public.thread_audits for select using (auth.uid() = user_id);
 
+-- INSERT/DELETE on drafts intentionally restricted to service role only.
+-- All draft writes go through the backend API, never the anon key.
 drop policy if exists "drafts_select_own" on public.drafts;
 create policy "drafts_select_own" on public.drafts for select using (exists (select 1 from public.lead_threads lt where lt.id = thread_id and lt.user_id = auth.uid()));
 

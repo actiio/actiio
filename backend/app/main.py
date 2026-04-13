@@ -19,11 +19,11 @@ from app.core.limiter import limiter
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-# Bypass SSL certificate validation for development
+# Bypass SSL certificate validation for development only when explicitly opted in
 if settings.app_env == "development" and settings.bypass_ssl:
     try:
         ssl._create_default_https_context = ssl._create_unverified_context
-        logger.warning("SSL certificate validation is disabled for outgoing requests in development mode.")
+        logger.warning("SSL certificate validation is disabled for outgoing requests — development mode with BYPASS_SSL=true.")
     except Exception as exc:
         logger.exception("Failed to disable SSL verification: %s", exc)
 
@@ -48,7 +48,7 @@ app.add_middleware(
     allow_origins=sorted(allowed_origins),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
 
@@ -76,7 +76,7 @@ async def rate_limit_middleware(request, call_next):
                 limit=settings.auth_rate_limit_per_minute,
                 window_seconds=60,
             )
-        elif path == f"{api_prefix}/gmail/webhook":
+        elif path == f"{api_prefix}/gmail/webhook" or path == f"{api_prefix}/cashfree/webhook":
             retry_after = check_request_rate_limit(
                 request=request,
                 key_scope="webhook",
@@ -114,4 +114,4 @@ app.include_router(api_router, prefix=settings.api_prefix)
 
 @app.get("/")
 def root():
-    return {"name": settings.app_name, "environment": settings.app_env}
+    return {"name": settings.app_name, "status": "ok"}

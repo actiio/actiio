@@ -20,6 +20,11 @@ frontend/.env.local
 
 # Local logs
 backend/worker.log
+*.log
+
+# Debug / scratch files
+backend/scratch/
+backend/time_test*.py
 
 # Keys / certs
 *.pem

@@ -40,10 +40,18 @@ export async function GET(request: Request) {
     if (!error) {
       const forwardedHost = request.headers.get('x-forwarded-host')
       const isLocalEnv = process.env.NODE_ENV === 'development'
+
+      // Whitelist of allowed production hosts for redirect safety
+      const ALLOWED_HOSTS = [
+        "actiio.co",
+        "www.actiio.co",
+        "staging.actiio.co",
+      ]
+
       if (isLocalEnv) {
         // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
         return NextResponse.redirect(`${origin}${next}`)
-      } else if (forwardedHost) {
+      } else if (forwardedHost && ALLOWED_HOSTS.includes(forwardedHost)) {
         return NextResponse.redirect(`https://${forwardedHost}${next}`)
       } else {
         return NextResponse.redirect(`${origin}${next}`)

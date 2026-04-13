@@ -57,3 +57,9 @@
 .text-gradient-brand {
   @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-primary to-emerald-400;
 }
+
+/* Payment return loading animation */
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}

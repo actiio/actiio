@@ -537,10 +537,42 @@ async def payment_webhook(request: Request):
     if not _verify_webhook_signature(raw_body, timestamp, signature):
         raise HTTPException(status_code=400, detail="Invalid webhook signature.")
 
+    # --- Replay protection: reject requests with stale timestamps (>5 min) ---
+    try:
+        ts_value = int(timestamp)
+        if abs(int(time.time()) - ts_value) > 300:
+            logger.warning("Webhook rejected: stale timestamp %s", timestamp)
+            raise HTTPException(status_code=400, detail="Webhook timestamp too old.")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid webhook timestamp format.")
+
     try:
         payload = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload.")
+
+    # --- Idempotency: deduplicate by event_id ---
+    event_id = (
+        payload.get("data", {}).get("payment", {}).get("cf_payment_id")
+        or payload.get("data", {}).get("subscription_details", {}).get("subscription_id")
+        or f"{timestamp}-{hashlib.sha256(raw_body).hexdigest()[:16]}"
+    )
+    try:
+        existing = (
+            supabase.table("processed_webhooks")
+            .select("id")
+            .eq("event_id", event_id)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            logger.info("Webhook already processed, skipping: event_id=%s", event_id)
+            return {"received": True, "duplicate": True}
+        supabase.table("processed_webhooks").insert({"event_id": event_id}).execute()
+    except Exception as exc:
+        # If the idempotency check fails, log but continue processing
+        # to avoid dropping legitimate webhooks due to transient DB issues.
+        logger.warning("Idempotency check failed for event_id=%s: %s", event_id, exc)
 
     event_type = str(payload.get("type", "")).upper()
     data = payload.get("data", {})
