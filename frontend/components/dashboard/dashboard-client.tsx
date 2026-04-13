@@ -263,6 +263,7 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
   const [gmailStatus, setGmailStatus] = useState<"connected" | "disconnected" | null>(null);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSyncAttemptedRef = useRef<string | null>(null);
 
   const fetchSubStatus = async () => {
     try {
@@ -308,7 +309,7 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
       setLastSyncedAt(null);
       setGmailStatus(null);
       setGmailEmail(null);
-      return;
+      return { connected: false, status: null as "connected" | "disconnected" | null, email: null as string | null, last_synced_at: null as string | null };
     }
 
     try {
@@ -318,10 +319,17 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
       setLastSyncedAt(gmailStatus.last_synced_at || null);
       setGmailStatus(gmailStatus.status || (gmailStatus.connected ? "connected" : null));
       setGmailEmail(gmailStatus.email || null);
+      return {
+        connected: Boolean(gmailStatus.connected),
+        status: gmailStatus.status || (gmailStatus.connected ? "connected" : null),
+        email: gmailStatus.email || null,
+        last_synced_at: gmailStatus.last_synced_at || null,
+      };
     } catch {
       setLastSyncedAt(null);
       setGmailStatus(null);
       setGmailEmail(null);
+      return { connected: false, status: null as "connected" | "disconnected" | null, email: null as string | null, last_synced_at: null as string | null };
     }
   }
 
@@ -346,11 +354,13 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
       if (showToast) {
         pushToast("Leads refreshed.");
       }
+      return data.threads;
     } catch (error) {
       setLoadError("Failed to load workspace data");
       if (showToast) {
         pushToast("Could not refresh dashboard.");
       }
+      return [] as LeadThread[];
     } finally {
       setIsRefreshing(false);
     }
@@ -417,8 +427,32 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
         setSubscriptionStatus(status);
 
         if (status === "active") {
-          await fetchThreads();
-          void refreshGmailStatus();
+          const [loadedThreads, gmailInfo] = await Promise.all([
+            fetchThreads(),
+            refreshGmailStatus(),
+          ]);
+
+          const needsInitialSync =
+            isGmailAgent(agentId) &&
+            gmailInfo.connected &&
+            (!gmailInfo.last_synced_at || loadedThreads.length === 0);
+
+          if (needsInitialSync && autoSyncAttemptedRef.current !== agentId) {
+            autoSyncAttemptedRef.current = agentId;
+            setIsSyncing(true);
+            try {
+              const syncResult = await syncGmail(agentId);
+              setLastSyncedAt(syncResult.last_synced_at || null);
+              await fetchThreads();
+            } catch (error) {
+              const message = error instanceof Error ? error.message.toLowerCase() : "";
+              if (message.includes("reconnect") || message.includes("disconnected")) {
+                setGmailStatus("disconnected");
+              }
+            } finally {
+              setIsSyncing(false);
+            }
+          }
         }
       } catch (error) {
         setLoadError("Failed to load workspace data");
