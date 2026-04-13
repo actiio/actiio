@@ -39,7 +39,16 @@ def sign_up(email: str, password: str) -> dict:
     except Exception as e:
         logger.error("Sign up failure: %s", e)
         error_text = str(e).lower()
-        if "already registered" in error_text or "already exists" in error_text:
+        duplicate_phrases = [
+            "already registered", 
+            "already exists", 
+            "already in use",
+            "duplicate key",
+            "unique constraint",
+            "email exists",
+            "email already"
+        ]
+        if any(p in error_text for p in duplicate_phrases):
             detail = "An account with this email already exists. Please sign in instead."
         elif "password" in error_text and ("weak" in error_text or "at least" in error_text or "too short" in error_text):
             detail = "Password is too weak. Please use a stronger password."
