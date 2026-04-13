@@ -156,6 +156,33 @@ def _build_gmail_settings_redirect(
     return redirect_url
 
 
+def _callback_missing_required_gmail_scopes(scope_value: str | None) -> bool:
+    if not scope_value:
+        return False
+
+    granted_scopes = {scope.strip() for scope in scope_value.split(" ") if scope.strip()}
+    required_scopes = {
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send",
+    }
+    return not required_scopes.issubset(granted_scopes)
+
+
+def _classify_gmail_callback_error(exc: Exception) -> str:
+    error_text = str(exc).lower()
+    missing_scope_phrases = [
+        "missing required gmail scopes",
+        "scope",
+        "not granted",
+        "access_denied",
+        "access denied",
+        "consent",
+    ]
+    if any(phrase in error_text for phrase in missing_scope_phrases):
+        return "missing_scopes"
+    return "callback_failed"
+
+
 @router.get("/auth", response_model=GmailAuthUrlResponse)
 def gmail_auth(agent_id: str = Query(default="gmail_followup"), current_user=Depends(get_current_user)):
     agent_id = validate_agent_id(agent_id)
@@ -172,6 +199,7 @@ def gmail_callback(
     code: Optional[str] = Query(default=None),
     state: Optional[str] = Query(default=None),
     error: Optional[str] = Query(default=None),
+    scope: Optional[str] = Query(default=None),
 ):
     parsed_user_id, agent_id = parse_state(state)
     if not parsed_user_id:
@@ -192,6 +220,17 @@ def gmail_callback(
     if not code:
         return RedirectResponse(
             url=_build_gmail_settings_redirect(agent_id, gmail_error="missing_code")
+        )
+
+    if _callback_missing_required_gmail_scopes(scope):
+        logger.info(
+            "Gmail OAuth callback missing required scopes for user %s (%s): %s",
+            parsed_user_id,
+            agent_id,
+            scope,
+        )
+        return RedirectResponse(
+            url=_build_gmail_settings_redirect(agent_id, gmail_error="missing_scopes")
         )
 
     try:
@@ -215,7 +254,10 @@ def gmail_callback(
             exc_info=exc,
         )
         return RedirectResponse(
-            url=_build_gmail_settings_redirect(agent_id, gmail_error="callback_failed")
+            url=_build_gmail_settings_redirect(
+                agent_id,
+                gmail_error=_classify_gmail_callback_error(exc),
+            )
         )
     return RedirectResponse(url=_build_gmail_settings_redirect(agent_id, gmail_connected=True))
 
