@@ -723,8 +723,8 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
 
   return (
       <div className="min-h-screen bg-gray-50">
-      <main className="mx-auto max-w-7xl px-8 py-2">
-        <header className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <header className="mb-6 flex flex-col gap-4 sm:mb-8 lg:mb-10 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full bg-brand-primary/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-brand-primary">
               <span>{meta.icon}</span>
@@ -739,7 +739,7 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
           </div>
 
           {isGmailAgent(agentId) && (
-            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm lg:min-w-[280px]">
+            <div className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm lg:min-w-[280px] lg:w-auto">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/40">Inbox Sync</p>
@@ -774,7 +774,7 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
         </header>
 
         {isGmailAgent(agentId) && gmailStatus && gmailStatus !== "connected" && (
-          <div className="mb-8 rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+          <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-4 shadow-sm sm:mb-8 sm:px-5">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-amber-700">Gmail attention needed</p>
@@ -800,7 +800,7 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
           </div>
         )}
 
-        <div className="mb-8 rounded-3xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+        <div className="mb-6 rounded-3xl border border-gray-200 bg-white px-4 py-4 shadow-sm sm:mb-8 sm:px-5">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex flex-wrap gap-5 border-b border-gray-100">
@@ -832,12 +832,12 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
                 ))}
               </div>
 
-              <div className="flex items-center gap-2 self-start xl:self-auto">
+              <div className="flex w-full items-center gap-2 self-start xl:w-auto xl:self-auto">
                 <Select
                   aria-label="Sort leads"
                   value={sortBy}
                   onChange={(event) => setSortBy(event.target.value as SortOption)}
-                  className="h-9 min-w-[180px] rounded-full border-gray-200 bg-gray-50 text-sm"
+                  className="h-9 w-full rounded-full border-gray-200 bg-gray-50 text-sm sm:min-w-[180px] xl:w-auto"
                 >
                     <option value="longest_waiting">Longest waiting</option>
                     <option value="recent_activity">Recent activity</option>
@@ -849,8 +849,8 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
         </div>
 
         {visibleThreads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-white px-6 py-20 text-center">
-            <div className="mb-6 rounded-3xl bg-gray-50 p-8">
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-white px-5 py-12 text-center sm:px-6 sm:py-16 lg:py-20">
+            <div className="mb-5 rounded-3xl bg-gray-50 p-6 sm:mb-6 sm:p-8">
               <svg className="h-14 w-14 text-brand-body/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
@@ -883,7 +883,7 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
             )}
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <div className="grid gap-4">
               {paginatedThreads.map((thread) => {
                 const isGenerating = generatingThreadIds.includes(thread.id);
@@ -893,7 +893,7 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
                   key={thread.id}
                   className="group overflow-hidden border-gray-200 p-0 transition-all hover:shadow-md"
                 >
-                  <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,280px)_1fr_auto] lg:items-center">
+                  <div className="grid gap-4 p-4 sm:gap-5 sm:p-5 lg:grid-cols-[minmax(0,280px)_1fr_auto] lg:items-center lg:gap-6 lg:p-6">
                     <div className="flex items-start gap-4">
                       <div className={cn("mt-1 h-3 w-3 rounded-full shrink-0", statusDotClass(thread))} />
                       <div className="min-w-0">
@@ -994,7 +994,7 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-start gap-3 lg:items-end">
+                    <div className="flex flex-col items-stretch gap-3 sm:items-start lg:items-end">
                       {(thread.has_pending_draft || thread.status === "pending_approval") && (
                         <Button size="sm" className="font-bold px-6 shadow-lg shadow-brand-primary/20" onClick={() => setSelectedThread(thread)}>
                           Review Drafts

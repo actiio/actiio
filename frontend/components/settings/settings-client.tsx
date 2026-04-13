@@ -417,8 +417,8 @@ export function SettingsClient({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="mx-auto max-w-4xl px-8 py-10">
-        <header className="mb-10 flex items-center justify-between">
+      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+        <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between lg:mb-10">
           <div>
             {isOnboarding ? (
               <div className="inline-flex items-center gap-2 rounded-full bg-brand-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-brand-primary">
@@ -448,7 +448,7 @@ export function SettingsClient({
         </header>
 
         {isOnboarding ? (
-          <Card className="mb-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+          <Card className="mb-6 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm sm:mb-8 sm:p-6">
             <div className="grid gap-3 md:grid-cols-3">
               {[
                 { label: "Business profile", done: profileReady },
@@ -467,16 +467,16 @@ export function SettingsClient({
           </Card>
         ) : null}
 
-        <div className="space-y-12">
+        <div className="space-y-6 sm:space-y-8 lg:space-y-12">
           {/* Business Context */}
-          <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
-            <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+          <Card className="overflow-hidden rounded-[1.5rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50 sm:rounded-[2rem]">
+            <div className="border-b border-gray-50 bg-gray-50/50 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/75">
                 {isOnboarding ? "Step 1 · Business Context" : "Business Context"}
               </h3>
             </div>
-            <div className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Business Name</label>
                   <Input
@@ -513,7 +513,7 @@ export function SettingsClient({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-8">
+              <div className="grid grid-cols-1 gap-6 lg:gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Target Customer</label>
                   <Textarea
@@ -559,49 +559,49 @@ export function SettingsClient({
             </div>
           </Card>
 
-          <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
-            <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+          <Card className="overflow-hidden rounded-[1.5rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50 sm:rounded-[2rem]">
+            <div className="border-b border-gray-50 bg-gray-50/50 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">Sales Assets</h3>
             </div>
-            <div className="p-8">
+            <div className="p-4 sm:p-6 lg:p-8">
               <SalesAssetsUploader userId={currentUserId} assets={salesAssets} onChange={setSalesAssets} />
             </div>
           </Card>
 
           {/* Integrations */}
-          <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
-            <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+          <Card className="overflow-hidden rounded-[1.5rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50 sm:rounded-[2rem]">
+            <div className="border-b border-gray-50 bg-gray-50/50 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">
                 {isOnboarding ? "Step 2 · Active Channel Links" : "Active Channel Links"}
               </h3>
             </div>
-            <div className="p-8 space-y-8">
+            <div className="space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">
               {isGmailAgent(agentId) && (
                 <div className={cn(
-                  "group relative overflow-hidden rounded-[2.5rem] border p-10 transition-all",
+                  "group relative overflow-hidden rounded-[1.75rem] border p-5 transition-all sm:rounded-[2rem] sm:p-6 lg:rounded-[2.5rem] lg:p-10",
                   gmailConnected ? "bg-white border-green-100 shadow-xl shadow-green-500/5" : "bg-gray-50/50 border-gray-100"
                 )}>
-                  <div className="flex items-center justify-between relative z-10">
-                    <div className="flex items-center gap-6">
+                  <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-start gap-4 sm:items-center sm:gap-6">
                       <div className={cn(
-                        "flex h-20 w-20 items-center justify-center rounded-3xl text-3xl transition-all duration-700",
+                        "flex h-14 w-14 items-center justify-center rounded-2xl text-2xl transition-all duration-700 sm:h-16 sm:w-16 sm:text-3xl lg:h-20 lg:w-20 lg:rounded-3xl",
                         gmailConnected ? "bg-green-50 scale-110 shadow-xl" : "bg-white border border-gray-100"
                       )}>
                         📧
                       </div>
                       <div>
-                        <h4 className="font-black text-2xl text-brand-heading tracking-tight">Gmail Integration</h4>
+                        <h4 className="text-xl font-black tracking-tight text-brand-heading sm:text-2xl">Gmail Integration</h4>
                         <p className="text-[10px] font-black text-brand-body/60 uppercase tracking-[0.2em] mt-2">
                           {gmailConnected ? "Direct Sync Active" : "Channel Disconnected"}
                         </p>
                       </div>
                     </div>
                     {gmailConnected ? (
-                      <div className="flex flex-col items-start gap-3">
-                        <div className="flex gap-4">
+                      <div className="flex flex-col items-stretch gap-3 sm:items-start">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
                           <Button
                             variant="ghost"
-                            className="rounded-xl font-bold text-brand-body/70 hover:text-brand-primary transition-colors"
+                            className="rounded-xl font-bold text-brand-body/70 transition-colors hover:text-brand-primary"
                             onClick={() => void handleGmailSync()}
                             disabled={gmailSyncing}
                           >
@@ -609,7 +609,7 @@ export function SettingsClient({
                           </Button>
                           <Button
                             variant="outline"
-                            className="h-12 rounded-[1.25rem] border-red-100 text-red-600 font-black px-6 hover:bg-red-50"
+                            className="h-12 rounded-[1.25rem] border-red-100 px-6 font-black text-red-600 hover:bg-red-50"
                             onClick={disconnectGmailAction}
                             disabled={gmailSyncing}
                           >
@@ -623,7 +623,7 @@ export function SettingsClient({
                         ) : null}
                       </div>
                     ) : (
-                      <Button onClick={handleGmailConnect} className="h-14 rounded-[1.5rem] font-black px-10 shadow-2xl shadow-brand-primary/20 text-lg">
+                      <Button onClick={handleGmailConnect} className="h-12 rounded-[1.25rem] px-6 text-base font-black shadow-2xl shadow-brand-primary/20 sm:h-14 sm:rounded-[1.5rem] sm:px-10 sm:text-lg">
                         Connect Gmail
                       </Button>
                     )}
@@ -634,11 +634,11 @@ export function SettingsClient({
           </Card>
 
           {!isOnboarding ? (
-            <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
-              <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+            <Card className="overflow-hidden rounded-[1.5rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50 sm:rounded-[2rem]">
+              <div className="border-b border-gray-50 bg-gray-50/50 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">Subscription</h3>
               </div>
-              <div className="flex flex-col gap-5 p-8 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-4 p-4 sm:gap-5 sm:p-6 md:flex-row md:items-center md:justify-between lg:p-8">
                 <div>
                   <p className="text-xl font-black text-brand-heading">{meta.name}</p>
                   <p className="mt-1 text-sm font-medium text-brand-body/75">
@@ -653,11 +653,11 @@ export function SettingsClient({
           ) : null}
 
           {!isOnboarding ? (
-            <Card className="overflow-hidden rounded-[2rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50">
-              <div className="border-b border-gray-50 bg-gray-50/50 px-8 py-5">
+            <Card className="overflow-hidden rounded-[1.5rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50 sm:rounded-[2rem]">
+              <div className="border-b border-gray-50 bg-gray-50/50 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">Support</h3>
               </div>
-              <div className="space-y-6 p-8">
+              <div className="space-y-5 p-4 sm:space-y-6 sm:p-6 lg:p-8">
                 <div>
                   <p className="text-xl font-black text-brand-heading">Need help or want to report an issue?</p>
                   <p className="mt-1 text-sm font-medium text-brand-body/75">
@@ -711,7 +711,7 @@ export function SettingsClient({
                     <p className="px-1 text-xs text-brand-body/70"></p>
                   )}
                 </div>
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                   <p className="text-xs text-brand-body/70">
                     You can also reach out to support@actiio.co
                   </p>

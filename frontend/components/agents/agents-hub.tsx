@@ -466,13 +466,13 @@ export function AgentsHub() {
         </div>
       </aside>
 
-      <main className="px-4 py-6 lg:px-8">
-        <div className="mx-auto max-w-7xl space-y-8 lg:pt-4">
+      <main className="px-4 py-5 sm:py-6 lg:px-8">
+        <div className="mx-auto max-w-7xl space-y-6 lg:space-y-8 lg:pt-4">
           {/* Expiry warning banner */}
           {expiringAgents.map(({ agentId, daysRemaining }) => (
             <div
               key={`expiry-${agentId}`}
-              className="flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4"
+              className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 sm:px-6"
             >
               <p className="text-sm font-semibold text-amber-800">
                 ⚠️ Your subscription expires in {daysRemaining} day
@@ -504,7 +504,7 @@ export function AgentsHub() {
           </header>
 
           {!loading && subscribedAgents.length === 0 && (
-            <Card className="rounded-2xl border border-gray-100 p-8">
+            <Card className="rounded-2xl border border-gray-100 p-5 sm:p-8">
               <h2 className="text-lg font-semibold text-gray-900">Welcome to Actiio</h2>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">
                 Subscribe to your first agent to start monitoring your leads automatically. The Gmail Follow-up Agent is
@@ -553,7 +553,7 @@ export function AgentsHub() {
                               ? "Cashfree is confirming your autopay authorization."
                               : "We’re waiting for Cashfree to confirm your payment. This usually takes a minute."}
                           </p>
-                          <div className="mt-6 flex justify-end gap-3">
+                          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
                             {isAutopayPending && (
                               <Button
                                 variant="outline"
@@ -654,7 +654,7 @@ export function AgentsHub() {
                           </Button>
                         </div>
 
-                        <div className="mt-6 grid grid-cols-3 gap-3">
+                        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
                           {[
                             { label: "Need attention", value: metrics?.needs_attention || 0 },
                             { label: "Active leads", value: metrics?.active_leads || 0 },
@@ -762,7 +762,7 @@ export function AgentsHub() {
             </div>
           </section>
           <section className="mb-12">
-            <div className="relative overflow-hidden rounded-[2rem] border border-brand-primary/10 bg-white p-8 md:p-12 shadow-sm">
+            <div className="relative overflow-hidden rounded-[2rem] border border-brand-primary/10 bg-white p-5 sm:p-8 md:p-12 shadow-sm">
               <div className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-brand-primary/5 blur-3xl" />
               <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-brand-primary/5 blur-3xl" />
               
@@ -773,7 +773,7 @@ export function AgentsHub() {
                 <h2 className="mb-4 text-2xl font-black tracking-tight text-brand-heading md:text-3xl">
                   Need a specialized skill?
                 </h2>
-                <p className="mx-auto mb-8 max-w-xl text-lg text-brand-body/60">
+                <p className="mx-auto mb-6 max-w-xl text-base text-brand-body/60 sm:mb-8 sm:text-lg">
                   We are constantly training our agents on new domains. Let us know what you need and we will prioritize it in our roadmap.
                 </p>
                 <SuggestSkillModal>
