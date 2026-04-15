@@ -216,3 +216,14 @@ export async function renewSubscription(
     }
   );
 }
+export async function cancelSubscription(
+  agentId: string
+): Promise<{ success: boolean; message: string }> {
+  return apiFetch<{ success: boolean; message: string }>(
+    "/api/payment/cancel",
+    {
+      method: "POST",
+      body: JSON.stringify({ agent_id: agentId }),
+    }
+  );
+}

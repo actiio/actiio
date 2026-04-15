@@ -130,7 +130,7 @@ export function OnboardingFlow({ agentId }: { agentId: string }) {
           <Textarea placeholder="Service Pricing / Budget (e.g. Starter: $500, Custom: $5k+)" value={form.price_range} onChange={(e) => setForm({ ...form, price_range: e.target.value })} className="min-h-[100px] rounded-2xl border-gray-100 md:col-span-2" />
           <Textarea placeholder="Core offer" value={form.core_offer} onChange={(e) => setForm({ ...form, core_offer: e.target.value })} className="min-h-[120px] rounded-2xl border-gray-100 md:col-span-2" />
           <Textarea placeholder="Differentiator" value={form.differentiator} onChange={(e) => setForm({ ...form, differentiator: e.target.value })} className="min-h-[100px] rounded-2xl border-gray-100 md:col-span-2" />
-          <Input placeholder="Ongoing Offers / Discounts (Optional)" value={form.current_offer} onChange={(e) => setForm({ ...form, current_offer: e.target.value })} className="h-12 rounded-2xl border-gray-100 md:col-span-2" />
+          <Input placeholder="Ongoing Offers / Discounts" value={form.current_offer} onChange={(e) => setForm({ ...form, current_offer: e.target.value })} className="h-12 rounded-2xl border-gray-100 md:col-span-2" />
         </div>
       </Card>
 

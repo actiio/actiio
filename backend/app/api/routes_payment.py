@@ -6,7 +6,7 @@ import hmac
 import logging
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -60,7 +60,19 @@ def _cashfree_return_base_url() -> str:
 
 
 def _cashfree_return_url(**params: str) -> str:
-    return f"{_cashfree_return_base_url()}?{urlencode(params)}"
+    base = _cashfree_return_base_url()
+    
+    # If a specific subpage is requested, route there
+    if "redirect_to" in params:
+        redirect = params.pop("redirect_to")
+        agent_id = params.get("agent_id")
+        frontend = (settings.frontend_url or "http://localhost:3000").strip().rstrip("/")
+        if redirect == "billing" and agent_id:
+            base = f"{frontend}/agents/{agent_id}/billing"
+        elif redirect == "dashboard" and agent_id:
+            base = f"{frontend}/agents/{agent_id}/dashboard"
+
+    return f"{base}?{urlencode(params)}"
 
 
 def _generate_order_id(user_id: str, agent_id: str) -> str:
@@ -279,6 +291,12 @@ class RenewRequest(BaseModel):
 
 RenewRequest.model_rebuild()
 
+class CancelSubscriptionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    agent_id: str = Field(default="gmail_followup", min_length=1, max_length=120)
+
+CancelSubscriptionRequest.model_rebuild()
+
 
 # ---------------------------------------------------------------------------
 # POST /payment/create-order
@@ -450,6 +468,7 @@ async def create_autopay_subscription(
                 subscription_id=subscription_id,
                 agent_id=agent_id,
                 autopay="true",
+                redirect_to="billing"
             ),
             "notification_channel": ["EMAIL", "SMS"],
         },
@@ -516,6 +535,93 @@ async def create_autopay_subscription(
         "subscription_session_id": subscription_session_id,
         "subscription_id": subscription_id,
     }
+
+
+# ---------------------------------------------------------------------------
+# POST /payment/cancel
+# ---------------------------------------------------------------------------
+
+@router.post("/cancel")
+@limiter.limit("5/hour", key_func=user_or_ip_key_func)
+async def cancel_subscription(
+    request: Request,
+    body: CancelSubscriptionRequest = Body(default_factory=CancelSubscriptionRequest),
+    current_user=Depends(get_current_user),
+):
+    """Cancel an active Cashfree subscription (disables autopay)."""
+    if not settings.cashfree_app_id or not settings.cashfree_secret_key:
+        raise HTTPException(status_code=400, detail="Payment provider is not configured.")
+
+    agent_id = validate_agent_id(body.agent_id)
+    user_id = str(current_user.id)
+
+    # 1. Look up the subscription
+    existing = (
+        supabase.table("user_subscriptions")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("agent_id", agent_id)
+        .limit(1)
+        .execute()
+    )
+    row = existing.data[0] if existing.data else None
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="No subscription found for this agent.")
+
+    subscription_id = row.get("cashfree_subscription_id")
+    if not subscription_id:
+        # If there's no subscription id, it might be a one-time payment agent or already handled.
+        # Just ensure autopay_enabled is false locally.
+        if row.get("autopay_enabled"):
+            (
+                supabase.table("user_subscriptions")
+                .update({"autopay_enabled": False, "updated_at": _now_utc().isoformat()})
+                .eq("id", row["id"])
+                .execute()
+            )
+        return {"success": True, "message": "Autopay disabled."}
+
+    # 2. Call Cashfree to cancel
+    try:
+        async with httpx.AsyncClient(timeout=_CASHFREE_TIMEOUT) as client:
+            resp = await client.post(
+                _cashfree_url(f"/subscriptions/{subscription_id}/manage"),
+                headers=_cashfree_headers(_SUBSCRIPTION_API_VERSION),
+                json={"action": "CANCEL"},
+            )
+            resp_data = resp.json()
+            
+            # 400 with "Subscription already cancelled" or "invalid status for action" (usually means already terminal) is fine
+            is_already_terminal = (
+                "already cancelled" in resp_data.get("message", "").lower() or
+                resp_data.get("code") == "subscription_status_invalid_for_action"
+            )
+
+            if resp.status_code == 400 and is_already_terminal:
+                logger.info("Subscription %s is already in a terminal state or cancelled on Cashfree.", subscription_id)
+            elif resp.status_code not in (200, 201):
+                logger.error("Cashfree cancel failed: %s %s", resp.status_code, resp_data)
+                raise HTTPException(
+                    status_code=502,
+                    detail=resp_data.get("message", "Failed to cancel at payment provider."),
+                )
+    except httpx.HTTPError as exc:
+        logger.exception("Cashfree cancel API request failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Failed to reach payment provider.") from exc
+
+    # 3. Update local DB
+    (
+        supabase.table("user_subscriptions")
+        .update({
+            "autopay_enabled": False,
+            "updated_at": _now_utc().isoformat(),
+        })
+        .eq("id", row["id"])
+        .execute()
+    )
+
+    return {"success": True, "message": "Subscription cancelled. Your agent remains active until the period ends."}
 
 
 # ---------------------------------------------------------------------------
@@ -653,6 +759,8 @@ async def payment_webhook(request: Request):
             user_id=row["user_id"],
             agent_id=row["agent_id"],
             expiry_date=new_period_end,
+            amount=float(payment_data.get("payment_amount", 499.0)),
+            payment_id=str(cashfree_payment_id) if cashfree_payment_id else None,
         )
 
     elif event_type in ("PAYMENT_FAILED_WEBHOOK", "PAYMENT_FAILED"):
@@ -800,6 +908,8 @@ async def _handle_subscription_webhook(event_type: str, data: dict[str, Any]) ->
             user_id=row["user_id"],
             agent_id=row["agent_id"],
             expiry_date=new_period_end,
+            amount=float(data.get("payment_amount") or data.get("amount") or 499.0),
+            payment_id=str(data.get("cf_payment_id") or data.get("payment_id") or ""),
         )
 
     elif event_type in ("SUBSCRIPTION_PAYMENT_FAILED", "SUBSCRIPTION_PAYMENT_CANCELLED"):
@@ -820,7 +930,11 @@ async def _handle_subscription_webhook(event_type: str, data: dict[str, Any]) ->
 
 
 def _send_activation_email_safe(
-    user_id: str, agent_id: str, expiry_date: datetime
+    user_id: str, 
+    agent_id: str, 
+    expiry_date: datetime,
+    amount: float = 499.0,
+    payment_id: Optional[str] = None
 ) -> None:
     """Send the activation email, swallowing exceptions so the webhook always returns 200."""
     try:
@@ -852,6 +966,8 @@ def _send_activation_email_safe(
             user_email=user_email,
             agent_name=agent_name,
             expiry_date=expiry_date,
+            amount=amount,
+            payment_id=payment_id,
         )
     except Exception as exc:
         logger.error("Failed to send activation email for user %s: %s", user_id, exc)

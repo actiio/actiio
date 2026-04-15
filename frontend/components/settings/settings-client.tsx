@@ -12,6 +12,19 @@ import { apiFetch, getBusinessProfile, saveBusinessProfile, connectGmail, syncGm
 import { getAgentMeta, isGmailAgent } from "@/lib/agents";
 import { BusinessProfile, SalesAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { UserCircle } from "lucide-react";
+
+function formatLastSynced(dateStr: string | null | undefined): string {
+  if (!dateStr) return "Never";
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "Never";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+  });
+}
 
 interface FormState {
   business_name: string;
@@ -46,8 +59,6 @@ const FIELD_LIMITS = {
   current_offer: 1000,
   price_range: 2000,
 } as const;
-
-
 
 function getProfileValidationMessage(form: FormState): string | null {
   if (!form.business_name.trim()) return "Business name is required.";
@@ -148,16 +159,10 @@ export function SettingsClient({
   const meta = getAgentMeta(agentId);
   const searchParams = useSearchParams();
   const isOnboarding = mode === "onboarding";
-  const settingsHeaderTitle = isOnboarding
-    ? `Set Up ${meta.shortName}`
-    : isGmailAgent(agentId)
-      ? "Settings"
-      : meta.settingsTitle;
-  const settingsHeaderSubtitle = isOnboarding
+  const title = isOnboarding ? `Set Up ${meta.shortName}` : "Business Profile";
+  const subtitle = isOnboarding
     ? "Complete your business profile and connect Gmail to start using the workspace."
-    : isGmailAgent(agentId)
-      ? "Business profile and inbox connection"
-      : meta.settingsSubtitle;
+    : "Manage your business details and connected channel.";
   const [form, setForm] = useState<FormState>(defaults);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [salesAssets, setSalesAssets] = useState<SalesAsset[]>([]);
@@ -237,6 +242,8 @@ export function SettingsClient({
         } catch (err) { }
 
         hasLoadedProfileRef.current = true;
+      } catch (err) {
+        console.error("Failed to load settings", err);
       } finally {
         setInitialLoading(false);
       }
@@ -289,8 +296,8 @@ export function SettingsClient({
     void (async () => {
       try {
         const result = await syncGmail(agentId);
-        setGmailLastSyncedAt(result.last_synced_at || null);
-        pushToast("Gmail connected and inbox synced.");
+        setGmailLastSyncedAt(result.last_synced_at || new Date().toISOString());
+        pushToast(`Sync complete: found ${result.leads_found} new leads.`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Gmail sync failed.";
         pushToast(message, "error");
@@ -373,29 +380,19 @@ export function SettingsClient({
   }
 
   async function handleGmailSync() {
-    if (gmailSyncing) {
-      return;
-    }
-
+    if (gmailSyncing) return;
     setGmailSyncing(true);
     try {
       const result = await syncGmail(agentId);
-      setGmailLastSyncedAt(result.last_synced_at || null);
-      pushToast("Gmail sync complete.");
+      setGmailLastSyncedAt(result.last_synced_at || new Date().toISOString());
+      pushToast(`Sync complete: found ${result.leads_found} new leads.`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Gmail sync failed.";
-      pushToast(message, "error");
+      const msg = err instanceof Error ? err.message : "Sync failed.";
+      pushToast(msg, "error");
     } finally {
       setGmailSyncing(false);
     }
   }
-
-  function handleCancelSubscription() {
-    // Subscription management is handled via the Agents Hub
-    window.location.href = "/agents";
-  }
-
-
 
   if (initialLoading) {
     return <SettingsSkeleton />;
@@ -406,18 +403,19 @@ export function SettingsClient({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+      <main className="max-w-5xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
         <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between lg:mb-10">
-          <div>
-            {isOnboarding ? (
-              <div className="inline-flex items-center gap-2 rounded-full bg-brand-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-brand-primary">
-                <span className={cn("h-2 w-2 rounded-full", setupComplete ? "bg-brand-primary" : "bg-amber-500")} />
-                {setupComplete ? "Setup Complete" : "Complete Setup"}
+          <div className="max-w-5xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <header className="space-y-1">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+                  <UserCircle className="h-5 w-5" />
+                </div>
+                <h1 className="text-3xl font-black tracking-tight text-brand-heading">Business Profile</h1>
               </div>
-            ) : null}
-            <h1 className="text-[clamp(1.8rem,3vw,2.35rem)] font-black tracking-tight text-brand-heading">{settingsHeaderTitle}</h1>
-            <p className="mt-1 text-sm text-brand-body/75">{settingsHeaderSubtitle}</p>
-            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-brand-body/60">
+              <p className="text-lg font-medium text-brand-body/60">{subtitle}</p>
+            </header>
+            <p className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-brand-body/80">
               {saveStatus === "saving" ? "Saving changes..." : saveStatus === "saved" ? "All changes saved" : saveStatus === "error" ? "Auto-save failed" : "Auto-save on"}
             </p>
           </div>
@@ -456,123 +454,121 @@ export function SettingsClient({
           </Card>
         ) : null}
 
-        <div className="space-y-6 sm:space-y-8 lg:space-y-12">
-          {/* Business Context */}
+        <div className="space-y-6 sm:space-y-8">
           <Card className="overflow-hidden rounded-[1.5rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50 sm:rounded-[2rem]">
             <div className="border-b border-gray-50 bg-gray-50/50 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/75">
                 {isOnboarding ? "Step 1 · Business Context" : "Business Context"}
               </h3>
-            </div>
-            <div className="space-y-6 p-4 sm:space-y-8 sm:p-6 lg:p-8">
+            </div>            <div className="space-y-8 p-4 sm:p-6 lg:p-10">
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-8">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Business Name</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/90 px-1">Business Name</label>
                   <Input
                     placeholder="e.g. Acme Sales Co"
                     value={form.business_name}
                     onChange={(e) => setForm({ ...form, business_name: e.target.value })}
                     maxLength={FIELD_LIMITS.business_name}
-                    className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                    className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/75 focus-visible:ring-brand-primary"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Industry</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading/90 px-1">Industry</label>
                   <Input
                     placeholder="e.g. SaaS, Real Estate"
                     value={form.industry}
                     onChange={(e) => setForm({ ...form, industry: e.target.value })}
                     maxLength={FIELD_LIMITS.industry}
-                    className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                    className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/75 focus-visible:ring-brand-primary"
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">{isOnboarding ? "Service Pricing / Budget" : "Pricing / Budget Range"}</label>
-                  <Textarea
-                    placeholder="List your services and their typical pricing or budget ranges."
-                    value={form.price_range}
-                    onChange={(e) => setForm({ ...form, price_range: e.target.value })}
-                    maxLength={FIELD_LIMITS.price_range}
-                    className="min-h-[100px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
-                  />
-                  <p className="px-1 text-xs text-brand-body/60">
-                    {form.price_range.length}/{FIELD_LIMITS.price_range}
-                  </p>
                 </div>
               </div>
-
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Description / Your core offer</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading px-1">Our Business Story & Core Offer</label>
                 <Textarea
-                  placeholder="What exactly are you selling? Describe the value proposition."
+                  placeholder="What exactly are you selling? Describe the value proposition and the heart of your business."
                   value={form.core_offer}
                   onChange={(e) => setForm({ ...form, core_offer: e.target.value })}
                   maxLength={FIELD_LIMITS.core_offer}
-                  className="rounded-2xl min-h-[120px] border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                  className="rounded-2xl min-h-[140px] border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/75 focus-visible:ring-brand-primary"
                 />
-                <p className="px-1 text-xs text-brand-body/60">
+                <p className="px-1 text-xs font-medium text-brand-body/90">
                   {form.core_offer.length}/{FIELD_LIMITS.core_offer}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading px-1">{isOnboarding ? "Service Pricing / Budget" : "Pricing / Budget Range"}</label>
+                <Textarea
+                  placeholder="List your services and their typical pricing or budget ranges."
+                  value={form.price_range}
+                  onChange={(e) => setForm({ ...form, price_range: e.target.value })}
+                  maxLength={FIELD_LIMITS.price_range}
+                  className="min-h-[120px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/75 focus-visible:ring-brand-primary"
+                />
+                <p className="px-1 text-xs font-medium text-brand-body/90">
+                  {form.price_range.length}/{FIELD_LIMITS.price_range}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading px-1">Ongoing Offers / Discounts (Optional)</label>
+                <Textarea
+                  placeholder="e.g. 20% off for first-time clients this month. Mention any temporary deals you want the agent to use."
+                  value={form.current_offer}
+                  onChange={(e) => setForm({ ...form, current_offer: e.target.value })}
+                  maxLength={FIELD_LIMITS.current_offer}
+                  className="rounded-2xl min-h-[100px] border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/75 focus-visible:ring-brand-primary"
+                />
+                <p className="px-1 text-xs font-medium text-brand-body/90">
+                  {form.current_offer.length}/{FIELD_LIMITS.current_offer}
                 </p>
               </div>
 
               <div className="grid grid-cols-1 gap-6 lg:gap-8">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Target Customer</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading px-1">Target Customer</label>
                   <Textarea
                     placeholder="Describe the kinds of buyers you sell to, their company stage, roles, needs, and the situations where they usually come looking for you."
                     value={form.target_customer}
                     onChange={(e) => setForm({ ...form, target_customer: e.target.value })}
                     maxLength={FIELD_LIMITS.target_customer}
-                    className="min-h-[120px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                    className="min-h-[120px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/75 focus-visible:ring-brand-primary"
                   />
-                  <p className="px-1 text-xs text-brand-body/60">
+                  <p className="px-1 text-xs font-medium text-brand-body/90">
                     {form.target_customer.length}/{FIELD_LIMITS.target_customer}
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Core Differentiators</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading px-1">Core Differentiators</label>
                   <Textarea
                     placeholder="Explain what makes your offering stand out. Include strengths like speed, expertise, pricing model, process, support, or outcomes clients choose you for."
                     value={form.differentiator}
                     onChange={(e) => setForm({ ...form, differentiator: e.target.value })}
                     maxLength={FIELD_LIMITS.differentiator}
-                    className="min-h-[120px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                    className="min-h-[120px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/75 focus-visible:ring-brand-primary"
                   />
-                  <p className="px-1 text-xs text-brand-body/60">
+                  <p className="px-1 text-xs font-medium text-brand-body/90">
                     {form.differentiator.length}/{FIELD_LIMITS.differentiator}
                   </p>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Email Footer</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-heading px-1">Email Footer</label>
                 <Textarea
                   placeholder={"Best,\nJane Doe\nAcme Sales Co\n+91 98765 43210"}
                   value={form.email_footer}
                   onChange={(e) => setForm({ ...form, email_footer: e.target.value })}
                   maxLength={FIELD_LIMITS.email_footer}
-                  className="rounded-2xl min-h-[140px] border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                  className="rounded-2xl min-h-[140px] border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/75 focus-visible:ring-brand-primary"
                 />
-                <p className="px-1 text-xs text-brand-body/75">
+                <p className="px-1 text-xs font-medium text-brand-body/90">
                   This footer will be added to sent emails so your signature stays consistent. {form.email_footer.length}/{FIELD_LIMITS.email_footer}
                 </p>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Ongoing Offers / Discounts (Optional)</label>
-                <Input
-                  placeholder="e.g. 20% off for first-time clients this month"
-                  value={form.current_offer}
-                  onChange={(e) => setForm({ ...form, current_offer: e.target.value })}
-                  maxLength={FIELD_LIMITS.current_offer}
-                  className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
-                />
-                <p className="px-1 text-xs text-brand-body/60">
-                  Mention any temporary deals or incentives you want the agent to use. {form.current_offer.length}/{FIELD_LIMITS.current_offer}
-                </p>
-              </div>
-
             </div>
+
           </Card>
 
           <Card className="overflow-hidden rounded-[1.5rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50 sm:rounded-[2rem]">
@@ -584,7 +580,6 @@ export function SettingsClient({
             </div>
           </Card>
 
-          {/* Integrations */}
           <Card className="overflow-hidden rounded-[1.5rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50 sm:rounded-[2rem]">
             <div className="border-b border-gray-50 bg-gray-50/50 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">
@@ -608,7 +603,7 @@ export function SettingsClient({
                       <div>
                         <h4 className="text-xl font-black tracking-tight text-brand-heading sm:text-2xl">Gmail Integration</h4>
                         <p className="text-[10px] font-black text-brand-body/60 uppercase tracking-[0.2em] mt-2">
-                          {gmailConnected ? "Direct Sync Active" : "Channel Disconnected"}
+                          {gmailConnected ? `Last synced: ${formatLastSynced(gmailLastSyncedAt)}` : "Channel Disconnected"}
                         </p>
                       </div>
                     </div>
@@ -632,11 +627,6 @@ export function SettingsClient({
                             Disconnect
                           </Button>
                         </div>
-                        {gmailSyncing ? (
-                          <p className="max-w-md rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-                            Gmail sync is running. Keep this page open and do not refresh until it finishes.
-                          </p>
-                        ) : null}
                       </div>
                     ) : (
                       <Button onClick={handleGmailConnect} className="h-12 rounded-[1.25rem] px-6 text-base font-black shadow-2xl shadow-brand-primary/20 sm:h-14 sm:rounded-[1.5rem] sm:px-10 sm:text-lg">
@@ -649,24 +639,6 @@ export function SettingsClient({
             </div>
           </Card>
 
-          {!isOnboarding ? (
-            <Card className="overflow-hidden rounded-[1.5rem] border-gray-100 bg-white shadow-xl shadow-gray-200/50 sm:rounded-[2rem]">
-              <div className="border-b border-gray-50 bg-gray-50/50 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-body/60">Subscription</h3>
-              </div>
-              <div className="flex flex-col gap-4 p-4 sm:gap-5 sm:p-6 md:flex-row md:items-center md:justify-between lg:p-8">
-                <div>
-                  <p className="text-xl font-black text-brand-heading">{meta.name}</p>
-                  <p className="mt-1 text-sm font-medium text-brand-body/75">
-                    Billing and access are managed separately for this agent.
-                  </p>
-                </div>
-                <Button variant="outline" className="rounded-full px-6 font-black" onClick={() => void handleCancelSubscription()}>
-                  Cancel Subscription
-                </Button>
-              </div>
-            </Card>
-          ) : null}
 
 
         </div>

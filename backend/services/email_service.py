@@ -90,9 +90,13 @@ def send_gmail_disconnection_alert(user_email: Optional[str], gmail_email: Optio
 
 
 def send_subscription_activated_email(
-    user_email: str, agent_name: str, expiry_date: datetime
+    user_email: str, 
+    agent_name: str, 
+    expiry_date: datetime,
+    amount: float = 499.0,
+    payment_id: Optional[str] = None
 ) -> None:
-    """Send a premium activation email after successful subscription payment."""
+    """Send a premium activation email with a payment receipt summary."""
     settings = get_settings()
 
     if not user_email:
@@ -113,6 +117,31 @@ def send_subscription_activated_email(
 
     resend.api_key = settings.resend_api_key
 
+    # Format receipt section
+    receipt_html = f"""
+    <div style="margin: 32px 0; padding: 24px; background: #f9fafb; border-radius: 12px; border: 1px solid #f3f4f6;">
+      <h3 style="margin: 0 0 16px; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280;">Payment Summary</h3>
+      <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 15px; line-height: 2;">
+        <tr>
+          <td style="color: #6b7280;">Description</td>
+          <td align="right" style="font-weight: 700; color: #111827;">Actiio Agent: {agent_name}</td>
+        </tr>
+        <tr>
+          <td style="color: #6b7280;">Amount Paid</td>
+          <td align="right" style="font-weight: 700; color: #111827;">₹{amount:,.2f}</td>
+        </tr>
+        <tr>
+          <td style="color: #6b7280;">Reference ID</td>
+          <td align="right" style="font-family: monospace; font-size: 13px; color: #111827;">{payment_id or "N/A"}</td>
+        </tr>
+        <tr>
+          <td style="color: #6b7280;">Access Until</td>
+          <td align="right" style="font-weight: 700; color: #059669;">{expiry_str}</td>
+        </tr>
+      </table>
+    </div>
+    """
+
     html = f"""\
     <div style="margin:0;padding:32px 16px;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111111;">
       <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:48px;box-sizing:border-box;">
@@ -121,11 +150,14 @@ def send_subscription_activated_email(
           <span>Actiio</span>
         </div>
         <h1 style="font-size:28px;line-height:1.2;margin:0 0 16px;">You're all set, {user_name}.</h1>
-        <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 8px;">
-          Your <strong>{agent_name}</strong> is now active until <strong>{expiry_str}</strong>.
+        <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 16px;">
+          Your agent is now active and ready to hunt for leads.
         </p>
+        
+        {receipt_html}
+
         <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 28px;">
-          Start syncing your Gmail to track your leads.
+          Head over to your dashboard to start syncing your Gmail and setting up follow-ups.
         </p>
         <a href="{dashboard_url}" style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 22px;border-radius:8px;">
           Go to Dashboard
@@ -140,7 +172,7 @@ def send_subscription_activated_email(
             {
                 "from": "Actiio <noreply@actiio.co>",
                 "to": [user_email],
-                "subject": "Your Actiio subscription is active 🎉",
+                "subject": f"Receipt: Your {agent_name} is active!",
                 "html": html,
             }
         )
@@ -354,3 +386,170 @@ def send_password_reset_email(user_email: str, reset_link: str) -> None:
         })
     except Exception as exc:
         logger.error("Failed to send password reset email to %s: %s", user_email, exc)
+
+def send_weekly_digest_email(
+    user_email: str, 
+    pending_count: int, 
+    active_count: int
+) -> None:
+    """Send a minimalist weekly status update to the user."""
+    settings = get_settings()
+
+    if not user_email:
+        return
+
+    if not settings.resend_api_key:
+        logger.warning("Skipping weekly digest for %s because RESEND_API_KEY is not configured", user_email)
+        return
+
+    logo_url = _get_logo_url()
+    dashboard_url = (settings.frontend_url or "http://localhost:3000").rstrip("/")
+    user_name = user_email.split("@")[0].title()
+
+    resend.api_key = settings.resend_api_key
+
+    # Subject line logic
+    if pending_count > 0:
+        subject = f"📬 Action Required: {pending_count} drafts waiting for approval"
+    else:
+        subject = "📈 Weekly Update: Your Follow-up Pipeline"
+
+    html = f"""
+    <div style="margin:0;padding:32px 16px;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111111;">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:48px;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;gap:12px;font-size:24px;font-weight:700;letter-spacing:-0.02em;margin:0 0 24px;">
+          <img src="{logo_url}" alt="Actiio logo" width="32" height="32" style="display:block;width:32px;height:32px;border-radius:8px;" />
+          <span>Actiio</span>
+        </div>
+        
+        <h1 style="font-size:24px;line-height:1.2;margin:0 0 16px;">Weekly Pipeline Update</h1>
+        <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 32px;">
+          Hi {user_name}, here is a quick look at where your leads stand this week.
+        </p>
+
+        <div style="margin-bottom:24px; padding:24px; border-radius:12px; background:#f9fafb; border:1px solid #f3f4f6;">
+          <div style="font-size:14px; color:#6b7280; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Waiting on You</div>
+          <div style="font-size:32px; font-weight:800; color:#111827;">{pending_count} <span style="font-size:16px; font-weight:500; color:#4b5563;">Drafts</span></div>
+          <p style="font-size:14px; color:#6b7280; margin-top:8px;">Needs your approval before they can be sent.</p>
+        </div>
+
+        <div style="margin-bottom:32px; padding:24px; border-radius:12px; background:#f9fafb; border:1px solid #f3f4f6;">
+          <div style="font-size:14px; color:#6b7280; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Waiting on Leads</div>
+          <div style="font-size:32px; font-weight:800; color:#111827;">{active_count} <span style="font-size:16px; font-weight:500; color:#4b5563;">Active</span></div>
+          <p style="font-size:14px; color:#6b7280; margin-top:8px;">Leads we have contacted and are monitoring for a reply.</p>
+        </div>
+
+        <a href="{dashboard_url}" style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 22px;border-radius:8px;">
+          Go to Dashboard
+        </a>
+        
+        <p style="font-size:13px;line-height:1.6;color:#777777;margin:32px 0 0;">Team Actiio · actiio.co</p>
+      </div>
+    </div>
+    """
+
+    try:
+        resend.Emails.send({
+            "from": "Actiio <noreply@actiio.co>",
+            "to": [user_email],
+            "subject": subject,
+            "html": html,
+        })
+    except Exception as exc:
+        logger.error("Failed to send weekly digest to %s: %s", user_email, exc)
+
+
+def send_subscription_renewal_reminder(
+    user_email: str, 
+    agent_name: str, 
+    expiry_date: datetime,
+    autopay_enabled: bool = False
+) -> None:
+    """Send a reminder 3 days before a subscription expires or renews."""
+    settings = get_settings()
+    if not user_email or not settings.resend_api_key:
+        return
+
+    logo_url = _get_logo_url()
+    dashboard_url = (settings.frontend_url or "http://localhost:3000").rstrip("/")
+    expiry_str = expiry_date.strftime("%B %d, %Y")
+    resend.api_key = settings.resend_api_key
+
+    if autopay_enabled:
+        subject = f"🔄 Upcoming Renewal: Your {agent_name} Agent"
+        headline = "Your agent is renewing soon."
+        body = f"Your subscription for <strong>{agent_name}</strong> will automatically renew on <strong>{expiry_str}</strong>. No action is required from your side."
+        cta_text = "Manage Subscription"
+    else:
+        subject = f"⚠️ Your {agent_name} Agent expires in 3 days"
+        headline = "Don't let your follow-ups stop."
+        body = f"Your subscription for <strong>{agent_name}</strong> expires on <strong>{expiry_str}</strong>. Since autopay is not enabled, your agent will stop hunting for leads unless you renew manually."
+        cta_text = "Renew Now"
+
+    html = f"""
+    <div style="margin:0;padding:32px 16px;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111111;">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:48px;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;gap:12px;font-size:24px;font-weight:700;letter-spacing:-0.02em;margin:0 0 24px;">
+          <img src="{logo_url}" alt="Actiio logo" width="32" height="32" style="display:block;width:32px;height:32px;border-radius:8px;" />
+          <span>Actiio</span>
+        </div>
+        <h1 style="font-size:26px;line-height:1.2;margin:0 0 16px;">{headline}</h1>
+        <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 28px;">{body}</p>
+        <a href="{dashboard_url}/billing" style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 22px;border-radius:8px;">
+          {cta_text}
+        </a>
+        <p style="font-size:13px;line-height:1.6;color:#777777;margin:32px 0 0;">Team Actiio · actiio.co</p>
+      </div>
+    </div>
+    """
+
+    try:
+        resend.Emails.send({
+            "from": "Actiio <noreply@actiio.co>",
+            "to": [user_email],
+            "subject": subject,
+            "html": html,
+        })
+    except Exception as exc:
+        logger.error("Failed to send renewal reminder to %s: %s", user_email, exc)
+
+
+def send_subscription_expired_email(user_email: str, agent_name: str) -> None:
+    """Send a notice when a subscription has officially expired."""
+    settings = get_settings()
+    if not user_email or not settings.resend_api_key:
+        return
+
+    logo_url = _get_logo_url()
+    dashboard_url = (settings.frontend_url or "http://localhost:3000").rstrip("/")
+    resend.api_key = settings.resend_api_key
+
+    html = f"""
+    <div style="margin:0;padding:32px 16px;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111111;">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:48px;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;gap:12px;font-size:24px;font-weight:700;letter-spacing:-0.02em;margin:0 0 24px;">
+          <img src="{logo_url}" alt="Actiio logo" width="32" height="32" style="display:block;width:32px;height:32px;border-radius:8px;" />
+          <span>Actiio</span>
+        </div>
+        <h1 style="font-size:26px;line-height:1.2;margin:0 0 16px;">Your agent has expired.</h1>
+        <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 28px;">
+          The subscription for <strong>{agent_name}</strong> has ended. Your agent has stopped following up with leads. 
+          Reactivate now to restore service and resume your pipeline.
+        </p>
+        <a href="{dashboard_url}/billing" style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 22px;border-radius:8px;">
+          Reactivate Agent
+        </a>
+        <p style="font-size:13px;line-height:1.6;color:#777777;margin:32px 0 0;">Team Actiio · actiio.co</p>
+      </div>
+    </div>
+    """
+
+    try:
+        resend.Emails.send({
+            "from": "Actiio <noreply@actiio.co>",
+            "to": [user_email],
+            "subject": f"🚨 Action Required: Your {agent_name} Agent has expired",
+            "html": html,
+        })
+    except Exception as exc:
+        logger.error("Failed to send expiry notice to %s: %s", user_email, exc)

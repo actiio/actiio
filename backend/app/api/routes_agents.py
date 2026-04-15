@@ -30,7 +30,7 @@ def _is_missing_gmail_account_email_error(exc: Exception) -> bool:
 
 
 def _active_gmail_connection_query(user_id: str, agent_id: str | None = None, include_status: bool = True):
-    columns = "agent_id,email,status" if include_status else "agent_id,email"
+    columns = "agent_id,email,status,last_synced_at,created_at" if include_status else "agent_id,email,last_synced_at,created_at"
     query = (
         supabase.table("gmail_connections")
         .select(columns)
@@ -258,42 +258,80 @@ def get_agents(current_user=Depends(get_current_user)):
     )
     subs_by_agent = {s["agent_id"]: s for s in (subs_resp.data or [])}
 
-    # Also check waitlist status
+    # Bulk fetch supporting data
     waitlisted_agents = _safe_agent_id_set("agent_waitlist", current_user.id)
     profile_agents = _safe_agent_id_set("business_profiles", current_user.id)
+    
+    # Pre-fetch gmail connections with all needed fields
+    connections = _active_gmail_connections(current_user.id)
+    connections_by_agent = {c["agent_id"]: c for c in connections if c.get("agent_id")}
 
-    # Pre-fetch gmail connections in one go
-    gmail_connections = _safe_agent_id_set("gmail_connections", current_user.id)
+    # Pre-fetch all threads for the user to avoid N+1 queries in the loop
+    threads_resp = (
+        supabase.table("lead_threads")
+        .select("status,agent_id,last_inbound_at,last_outbound_at,gmail_account_email")
+        .eq("user_id", current_user.id)
+        .execute()
+    )
+    all_threads = threads_resp.data or []
 
     result = []
     for agent in agents:
-        sub = subs_by_agent.get(agent["id"])
+        agent_id = agent["id"]
+        sub = subs_by_agent.get(agent_id)
 
-        has_profile = agent["id"] in profile_agents
-        requires_gmail = _requires_gmail(agent["id"], agent.get("channel"))
+        has_profile = agent_id in profile_agents
+        requires_gmail = _requires_gmail(agent_id, agent.get("channel"))
         
-        has_gmail = False
-        if requires_gmail:
-            if agent["id"] in gmail_connections:
-                has_gmail = True
-            else:
-                legacy_ids = _legacy_agent_ids(agent["id"])
-                if any(lid in gmail_connections for lid in legacy_ids):
-                    has_gmail = True
+        # Resolve connection (handle legacy IDs)
+        conn = connections_by_agent.get(agent_id)
+        if not conn:
+            legacy_ids = _legacy_agent_ids(agent_id)
+            for lid in legacy_ids:
+                if lid in connections_by_agent:
+                    conn = connections_by_agent[lid]
+                    break
+        
+        has_gmail = bool(conn)
+        
+        thread_summary = None
         should_include_thread_summary = (
             sub
             and sub.get("status") == "active"
             and (has_gmail or not requires_gmail)
         )
 
+        if should_include_thread_summary:
+            # Filter threads for this specific agent from the pre-fetched list
+            agent_threads = []
+            if requires_gmail:
+                gmail_email = (conn.get("email") or "").strip().lower() if conn else ""
+                if gmail_email:
+                    agent_threads = [
+                        t for t in all_threads 
+                        if t.get("agent_id") == agent_id 
+                        and (t.get("gmail_account_email") or "").strip().lower() == gmail_email
+                    ]
+            else:
+                agent_threads = [t for t in all_threads if t.get("agent_id") == agent_id]
+            
+            visible_threads = [t for t in agent_threads if t.get("status") != "ignored"]
+            
+            thread_summary = {
+                "needs_attention": sum(1 for t in visible_threads if _is_waiting_on_you(t)),
+                "active_leads": sum(1 for t in visible_threads if _is_waiting_on_lead(t)),
+                "total_leads": len(visible_threads),
+                "last_synced": (conn.get("last_synced_at") or conn.get("created_at")) if conn else None,
+            }
+
         result.append({
             "agent": agent,
             "subscription": sub,
-            "on_waitlist": agent["id"] in waitlisted_agents,
+            "on_waitlist": agent_id in waitlisted_agents,
             "business_profile_configured": has_profile,
             "gmail_connected": has_gmail,
             "setup_complete": has_profile and (has_gmail or not requires_gmail),
-            "thread_summary": _thread_counts_for_agent(current_user.id, agent["id"]) if should_include_thread_summary else None,
+            "thread_summary": thread_summary,
         })
 
     return result

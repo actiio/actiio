@@ -134,11 +134,29 @@ export function AgentsHub() {
         const agentData = agentsResult.value;
         setAgents(agentData);
 
-        // Fetch subscription status for active agents
+        // Populate initial subStatus from the data we already fetched
+        const initialStatus: Record<string, SubscriptionStatus> = {};
+        agentData.forEach((item) => {
+          if (item.subscription) {
+            initialStatus[item.agent.id] = {
+              agent_id: item.agent.id,
+              status: item.subscription.status as any,
+              current_period_end: item.subscription.current_period_end,
+              autopay_enabled: item.subscription.autopay_enabled,
+              cashfree_subscription_id: item.subscription.cashfree_subscription_id,
+              days_remaining: 0, // Will be updated by fetchSubStatus in background
+            };
+          }
+        });
+        setSubStatus(initialStatus);
+
+        // Fetch fresh subscription status for active agents in the background.
+        // This ensures the "Active" cards and days remaining are synced with Cashfree
+        // without making the user wait for these network requests.
         const activeAgentIds = agentData
           .filter((a) => a.agent.status === "active")
           .map((a) => a.agent.id);
-        await Promise.allSettled(activeAgentIds.map(fetchSubStatus));
+        void Promise.allSettled(activeAgentIds.map(fetchSubStatus));
       } catch (err) {
         console.error("AgentsHub init failed:", err);
         pushToast("Failed to load agents hub.", "error");
@@ -156,12 +174,15 @@ export function AgentsHub() {
     }
   }, [pushToast, searchParams]);
 
+  const handledRedirectRef = useRef(false);
+
   // Handle Cashfree autopay return redirect:
   // e.g. /agents?subscription_id=ACTIIO-SUB-...&agent_id=gmail_followup&autopay=true
   useEffect(() => {
     const agentId = searchParams.get("agent_id") || searchParams.get("subscription_id")?.split("-")?.[3]; // Correct index is 3
     const isAutopay = searchParams.get("autopay") === "true";
-    if (!agentId || !isAutopay) return;
+    if (!agentId || !isAutopay || handledRedirectRef.current) return;
+    handledRedirectRef.current = true;
 
     // Clean the URL so a refresh doesn't re-trigger this
     try {
@@ -437,13 +458,13 @@ export function AgentsHub() {
     <div className="min-h-screen bg-[#f9fafb] lg:pl-64">
       <aside className="fixed left-0 top-0 hidden h-screen w-64 flex-col border-r border-gray-100 bg-white p-6 lg:flex">
         <div className="mb-8 space-y-6">
-          <Link href="/" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/30 hover:text-brand-primary transition-colors">
-            <span aria-hidden="true">←</span>
-            <span>Back to Home</span>
-          </Link>
           <Link href="/" className="flex items-center gap-2 group">
             <Image src="/logo.png" alt="Actiio Logo" width={24} height={24} className="h-6 w-auto" />
             <span className="text-xl font-bold tracking-tight text-brand-heading">Actiio</span>
+          </Link>
+          <Link href="/" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/60 hover:text-brand-primary transition-colors">
+            <span aria-hidden="true">←</span>
+            <span>Back to Home</span>
           </Link>
         </div>
 
@@ -634,34 +655,17 @@ export function AgentsHub() {
                           </div>
                         </div>
 
-                        {/* Subscription info bar */}
-                        <div className="mt-4 flex items-center gap-3">
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                            {sub?.days_remaining ?? 0} days remaining
-                          </span>
-                          <Button
-                            size="sm"
-                            className="rounded-full bg-brand-primary px-4 text-xs font-bold hover:bg-brand-primary/90 disabled:bg-gray-100 disabled:text-gray-400"
-                            disabled={paymentLoading?.includes(agent.id) || !canRenew}
-                            onClick={() => void handleRenew(agent.id)}
-                          >
-                            {paymentLoading === `renew:${agent.id}` ? "Processing…" : "Renew — ₹499"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full px-4 text-xs font-bold"
-                            disabled={paymentLoading?.includes(agent.id) || sub?.autopay_enabled || autopayPending}
-                            onClick={() => void handleAutopay(agent.id)}
-                          >
-                            {sub?.autopay_enabled
-                              ? "Autopay on"
-                              : autopayPending
-                              ? "Autopay pending"
-                              : paymentLoading === `autopay:${agent.id}`
-                              ? "Processing…"
-                              : "Set up autopay"}
-                          </Button>
+                        {/* Subtle Active Indicator */}
+                        <div className="mt-4 flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                             Active
+                          </div>
+                          {sub?.autopay_enabled && (
+                            <div className="flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-blue-700">
+                               Autopay
+                            </div>
+                          )}
                         </div>
 
                         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
