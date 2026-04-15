@@ -16,7 +16,7 @@ def get_business_profile(current_user=Depends(get_current_user), agent_id: str =
     response = (
         supabase.table("business_profiles")
         .select(
-            "user_id,agent_id,business_name,industry,target_customer,core_offer,price_range,differentiator,email_footer,sales_assets"
+            "user_id,agent_id,business_name,industry,target_customer,core_offer,price_range,differentiator,email_footer,sales_assets,current_offer"
         )
         .eq("user_id", current_user.id)
         .eq("agent_id", agent_id)
@@ -35,12 +35,13 @@ def get_business_profile(current_user=Depends(get_current_user), agent_id: str =
 def upsert_business_profile(payload: BusinessProfileUpsert, current_user=Depends(get_current_user)):
     data = sanitize_payload(
         payload.model_dump(),
-        preserve_newlines_keys={"target_customer", "core_offer", "differentiator", "email_footer"},
+        preserve_newlines_keys={"target_customer", "core_offer", "differentiator", "email_footer", "price_range", "current_offer"},
     )
     data["agent_id"] = validate_agent_id(data.get("agent_id"))
     data["price_range"] = data.get("price_range") or ""
     data["differentiator"] = data.get("differentiator") or ""
     data["email_footer"] = data.get("email_footer") or ""
+    data["current_offer"] = data.get("current_offer") or ""
     data["user_id"] = current_user.id
 
     response = (

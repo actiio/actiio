@@ -52,9 +52,10 @@ class BusinessProfileUpsert(BaseModel):
     industry: str = Field(min_length=1, max_length=100)
     target_customer: str = Field(min_length=1, max_length=2000)
     core_offer: str = Field(min_length=1, max_length=3000)
-    price_range: Optional[str] = Field(default=None, max_length=100)
+    price_range: Optional[str] = Field(default=None, max_length=2000)
     differentiator: Optional[str] = Field(default=None, max_length=3000)
     email_footer: Optional[str] = Field(default=None, max_length=2000)
+    current_offer: Optional[str] = Field(default=None, max_length=1000)
     sales_assets: list[SalesAsset] = Field(default_factory=list)
 
     @field_validator("agent_id", mode="before")
@@ -87,7 +88,7 @@ class BusinessProfileUpsert(BaseModel):
     def normalize_price_range(cls, value: Any) -> str | None:
         if value is None:
             return None
-        return _clip_text(value, default="", max_length=100)
+        return _clip_text(value, default="", max_length=2000)
 
     @field_validator("differentiator", mode="before")
     @classmethod
@@ -102,6 +103,13 @@ class BusinessProfileUpsert(BaseModel):
         if value is None:
             return None
         return _clip_text(value, default="", max_length=2000)
+
+    @field_validator("current_offer", mode="before")
+    @classmethod
+    def normalize_current_offer(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        return _clip_text(value, default="", max_length=1000)
 
     @field_validator("sales_assets", mode="before")
     @classmethod

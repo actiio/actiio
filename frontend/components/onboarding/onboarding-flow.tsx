@@ -17,6 +17,7 @@ type FormState = {
   core_offer: string;
   price_range: string;
   differentiator: string;
+  current_offer: string;
 };
 
 const defaults: FormState = {
@@ -26,6 +27,7 @@ const defaults: FormState = {
   core_offer: "",
   price_range: "",
   differentiator: "",
+  current_offer: "",
 };
 
 export function OnboardingFlow({ agentId }: { agentId: string }) {
@@ -48,15 +50,16 @@ export function OnboardingFlow({ agentId }: { agentId: string }) {
           core_offer: profile.core_offer || "",
           price_range: profile.price_range || "",
           differentiator: profile.differentiator || "",
+          current_offer: profile.current_offer || "",
         });
-      } catch {}
+      } catch { }
 
       try {
         if (isGmailAgent(agentId)) {
           const gmail = await apiFetch<{ connected: boolean }>(`/api/gmail/status?agent_id=${encodeURIComponent(agentId)}`);
           setGmailConnected(Boolean(gmail.connected));
         }
-      } catch {}
+      } catch { }
     }
 
     void load();
@@ -124,9 +127,10 @@ export function OnboardingFlow({ agentId }: { agentId: string }) {
           <Input placeholder="Business name" value={form.business_name} onChange={(e) => setForm({ ...form, business_name: e.target.value })} className="h-12 rounded-2xl border-gray-100" />
           <Input placeholder="Industry" value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} className="h-12 rounded-2xl border-gray-100" />
           <Input placeholder="Target customer" value={form.target_customer} onChange={(e) => setForm({ ...form, target_customer: e.target.value })} className="h-12 rounded-2xl border-gray-100" />
-          <Input placeholder="Price range" value={form.price_range} onChange={(e) => setForm({ ...form, price_range: e.target.value })} className="h-12 rounded-2xl border-gray-100" />
+          <Textarea placeholder="Service Pricing / Budget (e.g. Starter: $500, Custom: $5k+)" value={form.price_range} onChange={(e) => setForm({ ...form, price_range: e.target.value })} className="min-h-[100px] rounded-2xl border-gray-100 md:col-span-2" />
           <Textarea placeholder="Core offer" value={form.core_offer} onChange={(e) => setForm({ ...form, core_offer: e.target.value })} className="min-h-[120px] rounded-2xl border-gray-100 md:col-span-2" />
           <Textarea placeholder="Differentiator" value={form.differentiator} onChange={(e) => setForm({ ...form, differentiator: e.target.value })} className="min-h-[100px] rounded-2xl border-gray-100 md:col-span-2" />
+          <Input placeholder="Ongoing Offers / Discounts (Optional)" value={form.current_offer} onChange={(e) => setForm({ ...form, current_offer: e.target.value })} className="h-12 rounded-2xl border-gray-100 md:col-span-2" />
         </div>
       </Card>
 

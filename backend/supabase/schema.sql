@@ -75,9 +75,13 @@ create table if not exists public.business_profiles (
   differentiator text not null,
   email_footer text not null default '',
   sales_assets jsonb not null default '[]'::jsonb,
+  current_offer text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+ALTER TABLE public.business_profiles
+  ADD COLUMN IF NOT EXISTS current_offer text not null default '';
 
 ALTER TABLE public.business_profiles
   DROP COLUMN IF EXISTS silence_threshold_hours;

@@ -21,6 +21,7 @@ interface FormState {
   price_range: string;
   differentiator: string;
   email_footer: string;
+  current_offer: string;
 }
 
 const defaults: FormState = {
@@ -31,6 +32,7 @@ const defaults: FormState = {
   price_range: "",
   differentiator: "",
   email_footer: "",
+  current_offer: "",
 };
 
 const AUTOSAVE_DELAY_MS = 800;
@@ -41,6 +43,8 @@ const FIELD_LIMITS = {
   target_customer: 2000,
   differentiator: 3000,
   email_footer: 2000,
+  current_offer: 1000,
+  price_range: 2000,
 } as const;
 
 interface SupportFormState {
@@ -136,9 +140,9 @@ function SettingsSkeleton() {
 function canAutoSaveProfile(form: FormState): boolean {
   return Boolean(
     form.business_name.trim() &&
-      form.industry.trim() &&
-      form.target_customer.trim() &&
-      form.core_offer.trim()
+    form.industry.trim() &&
+    form.target_customer.trim() &&
+    form.core_offer.trim()
   );
 }
 
@@ -227,6 +231,7 @@ export function SettingsClient({
             price_range: profile.price_range || "",
             differentiator: profile.differentiator || "",
             email_footer: profile.email_footer || "",
+            current_offer: profile.current_offer || "",
           });
           setSalesAssets(Array.isArray(profile.sales_assets) ? profile.sales_assets : []);
           lastSavedPayloadRef.current = JSON.stringify({
@@ -237,6 +242,7 @@ export function SettingsClient({
             price_range: profile.price_range || "",
             differentiator: profile.differentiator || "",
             email_footer: profile.email_footer || "",
+            current_offer: profile.current_offer || "",
             sales_assets: Array.isArray(profile.sales_assets) ? profile.sales_assets : [],
           });
         }
@@ -379,8 +385,8 @@ export function SettingsClient({
 
   async function disconnectGmailAction() {
     await apiFetch("/api/gmail/disconnect", {
-        method: "POST",
-        body: JSON.stringify({ agent_id: agentId })
+      method: "POST",
+      body: JSON.stringify({ agent_id: agentId })
     });
     setGmailConnected(false);
   }
@@ -530,6 +536,19 @@ export function SettingsClient({
                     className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
                   />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">{isOnboarding ? "Service Pricing / Budget" : "Pricing / Budget Range"}</label>
+                  <Textarea
+                    placeholder="List your services and their typical pricing or budget ranges."
+                    value={form.price_range}
+                    onChange={(e) => setForm({ ...form, price_range: e.target.value })}
+                    maxLength={FIELD_LIMITS.price_range}
+                    className="min-h-[100px] rounded-2xl border-gray-100 bg-gray-50/30 p-5 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                  />
+                  <p className="px-1 text-xs text-brand-body/60">
+                    {form.price_range.length}/{FIELD_LIMITS.price_range}
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -586,6 +605,20 @@ export function SettingsClient({
                 />
                 <p className="px-1 text-xs text-brand-body/75">
                   This footer will be added to sent emails so your signature stays consistent. {form.email_footer.length}/{FIELD_LIMITS.email_footer}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/75 px-1">Ongoing Offers / Discounts (Optional)</label>
+                <Input
+                  placeholder="e.g. 20% off for first-time clients this month"
+                  value={form.current_offer}
+                  onChange={(e) => setForm({ ...form, current_offer: e.target.value })}
+                  maxLength={FIELD_LIMITS.current_offer}
+                  className="h-14 rounded-2xl border-gray-100 bg-gray-50/30 text-brand-heading placeholder:text-brand-body/45 focus-visible:ring-brand-primary"
+                />
+                <p className="px-1 text-xs text-brand-body/60">
+                  Mention any temporary deals or incentives you want the agent to use. {form.current_offer.length}/{FIELD_LIMITS.current_offer}
                 </p>
               </div>
 
