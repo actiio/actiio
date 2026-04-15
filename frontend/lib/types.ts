@@ -17,6 +17,7 @@ export type BusinessProfile = {
   price_range: string | null;
   differentiator: string | null;
   email_footer?: string | null;
+  current_offer?: string | null;
   sales_assets?: SalesAsset[];
 };
 

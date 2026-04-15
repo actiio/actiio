@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { apiFetch, getBusinessProfile, saveBusinessProfile, connectGmail, submitSupportRequest, syncGmail } from "@/lib/api";
 import { getAgentMeta, isGmailAgent } from "@/lib/agents";
-import { SalesAsset } from "@/lib/types";
+import { BusinessProfile, SalesAsset } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface FormState {
@@ -206,16 +206,7 @@ export function SettingsClient({
         }
         setCurrentUserId(me.id);
 
-        let profile: {
-          business_name?: string;
-          industry?: string;
-          target_customer?: string;
-          core_offer?: string;
-          price_range?: string;
-          differentiator?: string;
-          email_footer?: string;
-          sales_assets?: SalesAsset[];
-        } | null = null;
+        let profile: BusinessProfile | null = null;
         try {
           profile = await getBusinessProfile(agentId);
         } catch (err) {

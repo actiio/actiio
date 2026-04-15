@@ -2,7 +2,7 @@
 
 import { getAuthHeader } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
-import { AgentThreadsSummary, AgentsSummary, AgentWithSubscription, SubscriptionStatus } from "@/lib/types";
+import { AgentThreadsSummary, AgentsSummary, AgentWithSubscription, BusinessProfile, SubscriptionStatus } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -158,8 +158,8 @@ export async function sendGmail(agentId: string, payload: Record<string, unknown
   });
 }
 
-export async function getBusinessProfile(agentId: string = "gmail_followup"): Promise<any> {
-  return apiFetch(`/api/business-profile?agent_id=${encodeURIComponent(agentId)}`);
+export async function getBusinessProfile(agentId: string = "gmail_followup"): Promise<BusinessProfile> {
+  return apiFetch<BusinessProfile>(`/api/business-profile?agent_id=${encodeURIComponent(agentId)}`);
 }
 
 export async function saveBusinessProfile(agentId: string, data: Record<string, unknown>): Promise<any> {

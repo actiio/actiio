@@ -204,7 +204,7 @@ def _validate_attachment_metadata(file_name: str, mime_type: str) -> tuple[str, 
     return file_name, normalized_mime
 
 def _load_attachment_from_storage(
-    user_id: str, attachment_path: Optional[str], attachment_name: Optional[str]
+    user_id: str, agent_id: str, attachment_path: Optional[str], attachment_name: Optional[str]
 ) -> Optional[tuple[bytes, str, str]]:
     attachment_path = sanitize_text(attachment_path or "", preserve_newlines=False)
     attachment_name = sanitize_text(attachment_name or "", preserve_newlines=False) if attachment_name else None
@@ -216,6 +216,28 @@ def _load_attachment_from_storage(
         raise ValueError("Invalid attachment path")
     if ".." in attachment_path or "\\" in attachment_path:
         raise ValueError("Invalid attachment path")
+
+    try:
+        profile = (
+            supabase.table("business_profiles")
+            .select("sales_assets")
+            .eq("user_id", user_id)
+            .eq("agent_id", agent_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("Failed to validate sales asset ownership for user %s (%s): %s", user_id, agent_id, exc)
+        raise ValueError("Attachment ownership could not be verified") from exc
+
+    stored_assets = profile.data[0].get("sales_assets") if profile.data else []
+    allowed_paths = {
+        sanitize_text((asset or {}).get("path") or "", preserve_newlines=False)
+        for asset in stored_assets
+        if isinstance(asset, dict)
+    }
+    if attachment_path not in allowed_paths:
+        raise ValueError("Attachment is not linked to this business profile")
 
     settings = get_settings()
     bucket = settings.sales_assets_bucket or "sales-assets"
@@ -344,6 +366,7 @@ def send_gmail(
         if not attachment:
             attachment = _load_attachment_from_storage(
                 user_id=user_id,
+                agent_id=agent_id,
                 attachment_path=item.get("attachment_path"),
                 attachment_name=item.get("attachment_name"),
             )
