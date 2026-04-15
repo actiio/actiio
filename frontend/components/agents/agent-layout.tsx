@@ -15,7 +15,7 @@ type AgentLayoutProps = {
   agentId: string;
   agentName?: string;
   agentIcon?: string;
-  activePath: "dashboard" | "settings";
+  activePath: "dashboard" | "settings" | "support";
   children: React.ReactNode;
 };
 
@@ -48,6 +48,7 @@ export function AgentLayout({
   const navItems = [
     { key: "dashboard", label: "Dashboard", href: `/agents/${agentId}/dashboard` },
     { key: "settings", label: "Settings", href: `/agents/${agentId}/settings` },
+    { key: "support", label: "Support", href: `/agents/${agentId}/support` },
   ] as const;
 
   return (
