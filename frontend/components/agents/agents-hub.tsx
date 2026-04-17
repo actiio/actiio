@@ -176,8 +176,6 @@ export function AgentsHub() {
     }
   }, [pushToast, searchParams]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount only
 
   // Cleanup poll timer on unmount
   useEffect(() => {
