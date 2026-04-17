@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import { getSubscriptionStatus, cancelSubscription, createAutopaySubscription, renewSubscription } from "@/lib/api";
+import { getSubscriptionStatus, renewSubscription } from "@/lib/api";
 import { getAgentMeta } from "@/lib/agents";
 import { SubscriptionStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { CancelSubscriptionModal } from "../settings/cancel-subscription-modal";
-import { Calendar, Zap, CreditCard, ShieldCheck } from "lucide-react";
+import { Calendar, Zap, CreditCard } from "lucide-react";
 
 function formatExpiryDate(dateStr: string | null): string {
   if (!dateStr) return "—";
@@ -29,16 +27,17 @@ function getCashfreeMode(): "sandbox" | "production" {
     : "sandbox";
 }
 
+function isCashfreeBillingEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_CASHFREE_BILLING_ENABLED === "true";
+}
+
 export function BillingClient({ agentId }: { agentId: string }) {
   const meta = getAgentMeta(agentId);
   const { pushToast } = useToast();
 
   const [subStatus, setSubStatus] = useState<SubscriptionStatus | null>(null);
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
-  const [isCancelling, setIsCancelling] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const searchParams = useSearchParams();
   const handledRef = useRef(false);
 
   // Derive safety flags
@@ -62,36 +61,6 @@ export function BillingClient({ agentId }: { agentId: string }) {
     load();
   }, [agentId]);
 
-  // Handle Cashfree redirect:
-  useEffect(() => {
-    const isAutopaySuccess = searchParams.get("autopay") === "true";
-    if (!isAutopaySuccess || handledRef.current) return;
-    handledRef.current = true;
-
-    // Clean URL
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("autopay");
-      url.searchParams.delete("subscription_id");
-      url.searchParams.delete("agent_id");
-      url.searchParams.delete("redirect_to");
-      window.history.replaceState({}, "", url.pathname + url.search);
-    } catch { }
-
-    pushToast("Autopay setup received \u2014 updating status...");
-    
-    // Refresh status after a small delay for webhook sync
-    setTimeout(async () => {
-      try {
-        const sub = await getSubscriptionStatus(agentId);
-        setSubStatus(sub);
-        if (sub.autopay_enabled) {
-          pushToast("Autopay is now active! \u2728");
-        }
-      } catch { }
-    }, 3000);
-  }, [agentId, searchParams, pushToast]);
-
   // ------- payment flows -------
   async function openCashfreeCheckout(paymentSessionId: string): Promise<void> {
     if (!window.Cashfree) {
@@ -108,22 +77,13 @@ export function BillingClient({ agentId }: { agentId: string }) {
     }
   }
 
-  async function openCashfreeAutopayCheckout(subscriptionSessionId: string): Promise<void> {
-    if (!window.Cashfree) {
-      throw new Error("Payment SDK not loaded. Please refresh and try again.");
-    }
-    // @ts-ignore
-    const cashfree = window.Cashfree({ mode: getCashfreeMode() });
-    const result = await cashfree.subscriptionsCheckout({
-      subsSessionId: subscriptionSessionId,
-      redirectTarget: "_self",
-    });
-    if (result?.error?.message) {
-      throw new Error(result.error.message);
-    }
-  }
 
   async function handleRenew() {
+    if (!isCashfreeBillingEnabled()) {
+      pushToast("Renewals are temporarily unavailable. Please contact support to renew your plan.", "error");
+      return;
+    }
+
     setPaymentLoading("renew");
     try {
       const resp = await renewSubscription(agentId);
@@ -137,41 +97,6 @@ export function BillingClient({ agentId }: { agentId: string }) {
     }
   }
 
-  async function handleAutopay() {
-    setPaymentLoading("autopay");
-    try {
-      const resp = await createAutopaySubscription(agentId);
-      if (resp.status === "already_enabled") {
-        pushToast("Autopay is already enabled.");
-        const sub = await getSubscriptionStatus(agentId);
-        setSubStatus(sub);
-        return;
-      }
-      if (!resp.subscription_session_id) throw new Error("No autopay session returned.");
-      await openCashfreeAutopayCheckout(resp.subscription_session_id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not set up autopay.";
-      pushToast(message, "error");
-    } finally {
-      setPaymentLoading(null);
-    }
-  }
-
-  async function handleCancelSubscription() {
-    if (isCancelling) return;
-    setIsCancelling(true);
-    try {
-      await cancelSubscription(agentId);
-      if (subStatus) setSubStatus({ ...subStatus, autopay_enabled: false });
-      setShowCancelModal(false);
-      pushToast("Autopay disabled. Your subscription will not renew.");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to cancel subscription.";
-      pushToast(msg, "error");
-    } finally {
-      setIsCancelling(false);
-    }
-  }
 
   if (loading) {
     return (
@@ -239,55 +164,32 @@ export function BillingClient({ agentId }: { agentId: string }) {
 
                 <div className="w-full lg:w-72">
                   <div className="space-y-4">
-                    {subStatus?.status === "active" && !subStatus.autopay_enabled && (
-                      <Button
-                        className="h-14 w-full rounded-2xl bg-brand-primary font-black text-white shadow-lg shadow-brand-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                        onClick={() => void handleAutopay()}
-                        disabled={!!paymentLoading}
-                      >
-                        {paymentLoading === "autopay" ? "Processing..." : "Set up Autopay"}
-                      </Button>
-                    )}
-
-                    {!subStatus?.autopay_enabled && (
-                      <Button
-                        variant={isRenewable ? "default" : "secondary"}
-                        className={cn(
-                          "h-14 w-full rounded-2xl font-black transition-all",
-                          isRenewable
-                            ? "bg-brand-primary text-white shadow-lg shadow-brand-primary/20 hover:scale-[1.02] active:scale-[0.98]"
-                            : "bg-gray-100 text-gray-800 cursor-not-allowed"
-                        )}
-                        onClick={() => {
-                          if (isRenewable) void handleRenew();
-                        }}
-                        disabled={!!paymentLoading || !isRenewable}
-                      >
-                        {paymentLoading === "renew"
-                          ? "Processing..."
-                          : isTooEarlyToRenew
-                            ? "Renew Available Soon"
-                            : "Renew Now \u2014 \u20B9499"
-                        }
-                      </Button>
-                    )}
-
-                    {subStatus?.autopay_enabled && (
-                      <div className="space-y-4">
-                        <div className="flex h-14 items-center gap-3 rounded-2xl bg-emerald-50 px-6 font-black text-emerald-700">
-                          <ShieldCheck className="h-5 w-5" />
-                          Autopay Active
-                        </div>
-                        <Button
-                          variant="ghost"
-                          className="w-full text-xs font-bold text-gray-400 hover:text-red-500"
-                          onClick={() => setShowCancelModal(true)}
-                          disabled={isCancelling}
-                        >
-                          Disable Autopay
-                        </Button>
+                    {!isCashfreeBillingEnabled() && (
+                      <div className="rounded-2xl bg-gray-50 px-5 py-4 text-sm font-bold leading-relaxed text-gray-600">
+                        Online billing is temporarily unavailable. Please contact support to activate or renew your plan.
                       </div>
                     )}
+
+                    <Button
+                      variant={isRenewable ? "default" : "secondary"}
+                      className={cn(
+                        "h-14 w-full rounded-2xl font-black transition-all",
+                        isRenewable
+                          ? "bg-brand-primary text-white shadow-lg shadow-brand-primary/20 hover:scale-[1.02] active:scale-[0.98]"
+                          : "bg-gray-100 text-gray-800 cursor-not-allowed"
+                      )}
+                      onClick={() => {
+                        if (isRenewable) void handleRenew();
+                      }}
+                      disabled={!!paymentLoading || !isRenewable || !isCashfreeBillingEnabled()}
+                    >
+                      {paymentLoading === "renew"
+                        ? "Processing..."
+                        : isTooEarlyToRenew
+                          ? "Renew Available Soon"
+                          : "Renew Now \u2014 \u20B9499"
+                      }
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -302,12 +204,7 @@ export function BillingClient({ agentId }: { agentId: string }) {
         </div>
       </main>
 
-      <CancelSubscriptionModal
-        open={showCancelModal}
-        onClose={() => setShowCancelModal(false)}
-        onConfirm={() => void handleCancelSubscription()}
-        isCancelling={isCancelling}
-      />
+
     </div>
   );
 }

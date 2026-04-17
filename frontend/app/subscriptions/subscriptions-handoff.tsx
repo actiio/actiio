@@ -9,7 +9,7 @@ import { getSession } from "@/lib/supabase";
 function buildAgentsReturnPath(searchParams: URLSearchParams): string {
   const next = new URLSearchParams();
 
-  for (const key of ["subscription_id", "agent_id", "autopay", "order_id", "subscribed"]) {
+  for (const key of ["subscription_id", "agent_id", "order_id", "subscribed"]) {
     const value = searchParams.get(key);
     if (value) {
       next.set(key, value);

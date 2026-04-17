@@ -46,6 +46,18 @@ def _cashfree_headers(api_version: str = "2023-08-01") -> dict[str, str]:
     }
 
 
+def _cashfree_billing_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Cashfree billing is temporarily unavailable.",
+    )
+
+
+def _ensure_cashfree_billing_enabled() -> None:
+    if not settings.cashfree_billing_enabled:
+        raise _cashfree_billing_unavailable()
+
+
 def _cashfree_url(path: str) -> str:
     return f"{settings.cashfree_base_url}{path}"
 
@@ -140,135 +152,6 @@ def _subscription_plan_details() -> dict[str, Any]:
     }
 
 
-def _extract_subscription_id(payload_data: dict[str, Any]) -> str | None:
-    subscription_details = payload_data.get("subscription_details") or {}
-    payment_gateway_details = payload_data.get("payment_gateway_details") or {}
-    return (
-        payload_data.get("subscription_id")
-        or subscription_details.get("subscription_id")
-        or payment_gateway_details.get("gateway_subscription_id")
-        or payload_data.get("cf_subscription_id")
-        or subscription_details.get("cf_subscription_id")
-    )
-
-
-def _is_successful_charge(payload_data: dict[str, Any]) -> bool:
-    payment_type = str(payload_data.get("payment_type") or "").upper()
-    payment_status = str(payload_data.get("payment_status") or "").upper()
-    try:
-        payment_amount = float(payload_data.get("payment_amount") or 0)
-    except (TypeError, ValueError):
-        payment_amount = 0
-
-    if payment_type == "AUTH":
-        return False
-    return payment_status == "SUCCESS" and payment_amount >= _ORDER_AMOUNT
-
-
-async def _raise_subscription_charge(
-    subscription_id: str,
-    schedule_date: datetime,
-    remarks: str,
-) -> None:
-    payment_id = _generate_subscription_payment_id(subscription_id, schedule_date)
-    charge_payload = {
-        "subscription_id": subscription_id,
-        "payment_id": payment_id,
-        "payment_type": "CHARGE",
-        "payment_amount": _ORDER_AMOUNT,
-        "payment_currency": _ORDER_CURRENCY,
-        "payment_remarks": remarks,
-        "payment_schedule_date": schedule_date.isoformat(),
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=_CASHFREE_TIMEOUT) as client:
-            resp = await client.post(
-                _cashfree_url("/subscriptions/pay"),
-                headers=_cashfree_headers(_SUBSCRIPTION_API_VERSION),
-                json=charge_payload,
-            )
-            resp_data = resp.json()
-            if resp.status_code not in (200, 201):
-                logger.error(
-                    "Cashfree subscription charge failed: %s %s",
-                    resp.status_code,
-                    resp_data,
-                )
-    except httpx.HTTPError as exc:
-        logger.exception("Cashfree subscription charge API request failed: %s", exc)
-
-
-async def _sync_autopay_authorization_from_cashfree(row: dict[str, Any]) -> dict[str, Any]:
-    subscription_id = row.get("cashfree_subscription_id")
-    if not subscription_id or row.get("autopay_enabled"):
-        return row
-
-    try:
-        async with httpx.AsyncClient(timeout=_CASHFREE_TIMEOUT) as client:
-            resp = await client.get(
-                _cashfree_url(f"/subscriptions/{subscription_id}"),
-                headers=_cashfree_headers(_SUBSCRIPTION_API_VERSION),
-            )
-            resp_data = resp.json()
-            if resp.status_code not in (200, 201):
-                logger.warning(
-                    "Cashfree fetch subscription failed: %s %s",
-                    resp.status_code,
-                    resp_data,
-                )
-                return row
-    except httpx.HTTPError as exc:
-        logger.warning("Cashfree fetch subscription request failed: %s", exc)
-        return row
-
-    auth_details = resp_data.get("authorization_details") or {}
-    subscription_status = str(resp_data.get("subscription_status") or "").upper()
-    auth_status = str(auth_details.get("authorization_status") or "").upper()
-    logger.info(
-        "Checking autopay status for %s: sub_status=%s, auth_status=%s",
-        subscription_id, subscription_status, auth_status
-    )
-    if subscription_status == "ACTIVE" or auth_status in ("ACTIVE", "SUCCESS"):
-        updated = {
-            "autopay_enabled": True,
-            "status": "active", # Ensure status flips to active upon successful autopay authorization
-            "updated_at": _now_utc().isoformat(),
-        }
-        (
-            supabase.table("user_subscriptions")
-            .update(updated)
-            .eq("id", row["id"])
-            .execute()
-        )
-        return {**row, **updated}
-
-    # Cleanup: If the setup was cancelled or never finished, clear the pending ID.
-    if (
-        not row.get("autopay_enabled")
-        and subscription_id
-        and subscription_status in ("INITIALIZED", "LINK_EXPIRED", "CANCELLED", "PENDING", "DEACTIVATED")
-    ):
-        logger.info("Clearing abandoned autopay setup for %s", subscription_id)
-        updated = {
-            "cashfree_subscription_id": None, # Clear the ID so UI reverts to "Set up autopay"
-            "updated_at": _now_utc().isoformat(),
-        }
-        # If it was also holding the status in pending, reset it
-        if row.get("status") == "payment_pending" and not row.get("cashfree_order_id"):
-            updated["status"] = "expired"
-            
-        (
-            supabase.table("user_subscriptions")
-            .update(updated)
-            .eq("id", row["id"])
-            .execute()
-        )
-        return {**row, **updated}
-
-    return row
-
-
 # ---------------------------------------------------------------------------
 # Request schemas
 # ---------------------------------------------------------------------------
@@ -279,23 +162,13 @@ class CreateOrderRequest(BaseModel):
 
 CreateOrderRequest.model_rebuild()
 
-class CreateAutopayRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    agent_id: str = Field(default="gmail_followup", min_length=1, max_length=120)
 
-CreateAutopayRequest.model_rebuild()
 
 class RenewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     agent_id: str = Field(default="gmail_followup", min_length=1, max_length=120)
 
 RenewRequest.model_rebuild()
-
-class CancelSubscriptionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    agent_id: str = Field(default="gmail_followup", min_length=1, max_length=120)
-
-CancelSubscriptionRequest.model_rebuild()
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +183,8 @@ async def create_order(
     current_user=Depends(get_current_user),
 ):
     """Create a Cashfree payment order for a new agent subscription."""
+    _ensure_cashfree_billing_enabled()
+
     if not settings.cashfree_app_id or not settings.cashfree_secret_key:
         raise HTTPException(status_code=400, detail="Payment provider is not configured.")
 
@@ -410,218 +285,6 @@ async def create_order(
     }
 
 
-# ---------------------------------------------------------------------------
-# POST /payment/create-autopay
-# ---------------------------------------------------------------------------
-
-@router.post("/create-autopay")
-@limiter.limit("10/hour", key_func=user_or_ip_key_func)
-async def create_autopay_subscription(
-    request: Request,
-    body: CreateAutopayRequest = Body(default_factory=CreateAutopayRequest),
-    current_user=Depends(get_current_user),
-):
-    """Create a Cashfree subscription mandate for recurring autopay."""
-    if not settings.cashfree_app_id or not settings.cashfree_secret_key:
-        raise HTTPException(status_code=400, detail="Payment provider is not configured.")
-
-    agent_id = validate_agent_id(body.agent_id)
-    user_id = str(current_user.id)
-    user_email = getattr(current_user, "email", "") or ""
-    customer_name = user_email.split("@")[0] if user_email else "Actiio Customer"
-    _ensure_user_row(user_id, user_email)
-
-    existing = (
-        supabase.table("user_subscriptions")
-        .select("*")
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .limit(1)
-        .execute()
-    )
-    row = existing.data[0] if existing.data else None
-    if row and row.get("autopay_enabled") and row.get("cashfree_subscription_id"):
-        return {
-            "status": "already_enabled",
-            "subscription_id": row["cashfree_subscription_id"],
-        }
-
-    now = _now_utc()
-    subscription_id = _generate_subscription_id(user_id, agent_id)
-    expiry_time = now + timedelta(days=3650)
-
-    subscription_payload: dict[str, Any] = {
-        "subscription_id": subscription_id,
-        "customer_details": {
-            "customer_id": user_id,
-            "customer_name": customer_name,
-            "customer_email": user_email,
-            "customer_phone": "9999999999",
-        },
-        "plan_details": _subscription_plan_details(),
-        "authorization_details": {
-            "authorization_amount": 1,
-            "authorization_amount_refund": True,
-        },
-        "subscription_meta": {
-            "return_url": _cashfree_return_url(
-                subscription_id=subscription_id,
-                agent_id=agent_id,
-                autopay="true",
-                redirect_to="billing"
-            ),
-            "notification_channel": ["EMAIL", "SMS"],
-        },
-        "subscription_note": f"Actiio monthly autopay for {agent_id}",
-        "subscription_tags": {
-            "user_id": user_id,
-            "agent_id": agent_id,
-        },
-        "subscription_expiry_time": expiry_time.isoformat(),
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=_CASHFREE_TIMEOUT) as client:
-            resp = await client.post(
-                _cashfree_url("/subscriptions"),
-                headers=_cashfree_headers(_SUBSCRIPTION_API_VERSION),
-                json=subscription_payload,
-            )
-            resp_data = resp.json()
-            if resp.status_code not in (200, 201):
-                logger.error(
-                    "Cashfree create subscription failed: %s %s",
-                    resp.status_code,
-                    resp_data,
-                )
-                raise HTTPException(
-                    status_code=502,
-                    detail=resp_data.get("message", "Failed to create autopay setup."),
-                )
-    except httpx.HTTPError as exc:
-        logger.exception("Cashfree subscription API request failed: %s", exc)
-        raise HTTPException(
-            status_code=502, detail="Failed to create autopay setup."
-        ) from exc
-
-    subscription_session_id = resp_data.get("subscription_session_id")
-    if not subscription_session_id:
-        logger.error("Cashfree response missing subscription_session_id: %s", resp_data)
-        raise HTTPException(
-            status_code=502, detail="Payment provider did not return an autopay session."
-        )
-
-    current_status = row.get("status") if row else None
-    # Only switch to payment_pending if the subscription is not already established (active or expired).
-    # This prevents the UI from flipping to a "Pending" card if the user just initiates autopay setup but cancels.
-    next_status = current_status if current_status in ("active", "expired") else "payment_pending"
-    (
-        supabase.table("user_subscriptions")
-        .upsert(
-            {
-                "user_id": user_id,
-                "agent_id": agent_id,
-                "status": next_status,
-                "cashfree_subscription_id": subscription_id,
-                "autopay_enabled": False,
-                "updated_at": now.isoformat(),
-            },
-            on_conflict="user_id,agent_id",
-        )
-        .execute()
-    )
-
-    return {
-        "subscription_session_id": subscription_session_id,
-        "subscription_id": subscription_id,
-    }
-
-
-# ---------------------------------------------------------------------------
-# POST /payment/cancel
-# ---------------------------------------------------------------------------
-
-@router.post("/cancel")
-@limiter.limit("5/hour", key_func=user_or_ip_key_func)
-async def cancel_subscription(
-    request: Request,
-    body: CancelSubscriptionRequest = Body(default_factory=CancelSubscriptionRequest),
-    current_user=Depends(get_current_user),
-):
-    """Cancel an active Cashfree subscription (disables autopay)."""
-    if not settings.cashfree_app_id or not settings.cashfree_secret_key:
-        raise HTTPException(status_code=400, detail="Payment provider is not configured.")
-
-    agent_id = validate_agent_id(body.agent_id)
-    user_id = str(current_user.id)
-
-    # 1. Look up the subscription
-    existing = (
-        supabase.table("user_subscriptions")
-        .select("*")
-        .eq("user_id", user_id)
-        .eq("agent_id", agent_id)
-        .limit(1)
-        .execute()
-    )
-    row = existing.data[0] if existing.data else None
-    
-    if not row:
-        raise HTTPException(status_code=404, detail="No subscription found for this agent.")
-
-    subscription_id = row.get("cashfree_subscription_id")
-    if not subscription_id:
-        # If there's no subscription id, it might be a one-time payment agent or already handled.
-        # Just ensure autopay_enabled is false locally.
-        if row.get("autopay_enabled"):
-            (
-                supabase.table("user_subscriptions")
-                .update({"autopay_enabled": False, "updated_at": _now_utc().isoformat()})
-                .eq("id", row["id"])
-                .execute()
-            )
-        return {"success": True, "message": "Autopay disabled."}
-
-    # 2. Call Cashfree to cancel
-    try:
-        async with httpx.AsyncClient(timeout=_CASHFREE_TIMEOUT) as client:
-            resp = await client.post(
-                _cashfree_url(f"/subscriptions/{subscription_id}/manage"),
-                headers=_cashfree_headers(_SUBSCRIPTION_API_VERSION),
-                json={"action": "CANCEL"},
-            )
-            resp_data = resp.json()
-            
-            # 400 with "Subscription already cancelled" or "invalid status for action" (usually means already terminal) is fine
-            is_already_terminal = (
-                "already cancelled" in resp_data.get("message", "").lower() or
-                resp_data.get("code") == "subscription_status_invalid_for_action"
-            )
-
-            if resp.status_code == 400 and is_already_terminal:
-                logger.info("Subscription %s is already in a terminal state or cancelled on Cashfree.", subscription_id)
-            elif resp.status_code not in (200, 201):
-                logger.error("Cashfree cancel failed: %s %s", resp.status_code, resp_data)
-                raise HTTPException(
-                    status_code=502,
-                    detail=resp_data.get("message", "Failed to cancel at payment provider."),
-                )
-    except httpx.HTTPError as exc:
-        logger.exception("Cashfree cancel API request failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Failed to reach payment provider.") from exc
-
-    # 3. Update local DB
-    (
-        supabase.table("user_subscriptions")
-        .update({
-            "autopay_enabled": False,
-            "updated_at": _now_utc().isoformat(),
-        })
-        .eq("id", row["id"])
-        .execute()
-    )
-
-    return {"success": True, "message": "Subscription cancelled. Your agent remains active until the period ends."}
 
 
 # ---------------------------------------------------------------------------
@@ -661,6 +324,10 @@ async def payment_webhook(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload.")
 
+    if not settings.cashfree_billing_enabled:
+        logger.warning("Cashfree webhook accepted but ignored because billing is disabled.")
+        return {"received": True, "billing_disabled": True}
+
     # --- Idempotency: deduplicate by event_id ---
     event_id = (
         payload.get("data", {}).get("payment", {}).get("cf_payment_id")
@@ -687,8 +354,6 @@ async def payment_webhook(request: Request):
     event_type = str(payload.get("type", "")).upper()
     data = payload.get("data", {})
 
-    if event_type.startswith("SUBSCRIPTION_"):
-        return await _handle_subscription_webhook(event_type, data)
 
     order_data = data.get("order", {})
     payment_data = data.get("payment", {})
@@ -779,155 +444,6 @@ async def payment_webhook(request: Request):
     return {"received": True}
 
 
-async def _handle_subscription_webhook(event_type: str, data: dict[str, Any]) -> dict[str, bool]:
-    cashfree_subscription_id = _extract_subscription_id(data)
-    if not cashfree_subscription_id:
-        logger.warning("Subscription webhook missing subscription_id: %s", data)
-        return {"received": True}
-
-    local = (
-        supabase.table("user_subscriptions")
-        .select("id, user_id, agent_id, status, current_period_end")
-        .eq("cashfree_subscription_id", cashfree_subscription_id)
-        .limit(1)
-        .execute()
-    )
-    row = local.data[0] if local.data else None
-    if not row:
-        logger.warning(
-            "No subscription found for cashfree_subscription_id=%s",
-            cashfree_subscription_id,
-        )
-        return {"received": True}
-
-    now = _now_utc()
-    if event_type == "SUBSCRIPTION_STATUS_CHANGED":
-        subscription_details = data.get("subscription_details") or {}
-        subscription_status = str(
-            subscription_details.get("subscription_status") or ""
-        ).upper()
-
-        if subscription_status in ("ACTIVE", "BANK_APPROVAL_PENDING"):
-            update_data: dict[str, Any] = {
-                "autopay_enabled": True,
-                "updated_at": now.isoformat(),
-            }
-            if row.get("status") != "active":
-                update_data["status"] = "payment_pending"
-            (
-                supabase.table("user_subscriptions")
-                .update(update_data)
-                .eq("id", row["id"])
-                .execute()
-            )
-        elif subscription_status in (
-            "CUSTOMER_CANCELLED",
-            "CUSTOMER_PAUSED",
-            "CANCELLED",
-            "EXPIRED",
-            "LINK_EXPIRED",
-            "CARD_EXPIRED",
-        ):
-            update_data = {
-                "autopay_enabled": False,
-                "updated_at": now.isoformat(),
-            }
-            if row.get("status") != "active":
-                update_data["status"] = "expired"
-            (
-                supabase.table("user_subscriptions")
-                .update(update_data)
-                .eq("id", row["id"])
-                .execute()
-            )
-
-    elif event_type == "SUBSCRIPTION_AUTH_STATUS":
-        auth_details = data.get("authorization_details") or {}
-        auth_status = str(auth_details.get("authorization_status") or "").upper()
-        payment_status = str(data.get("payment_status") or "").upper()
-        auth_ok = auth_status in ("ACTIVE", "SUCCESS") or payment_status == "SUCCESS"
-        update_data = {
-            "autopay_enabled": auth_ok,
-            "cashfree_payment_id": str(data.get("cf_payment_id") or data.get("payment_id") or ""),
-            "cashfree_transaction_id": str(data.get("cf_txn_id") or ""),
-            "updated_at": now.isoformat(),
-        }
-        if auth_ok:
-            update_data["status"] = "active"
-        elif row.get("status") != "active":
-            update_data["status"] = "payment_failed"
-        (
-            supabase.table("user_subscriptions")
-            .update(update_data)
-            .eq("id", row["id"])
-            .execute()
-        )
-        if auth_ok:
-            schedule_date = now + timedelta(minutes=2)
-            remarks = "first autopay charge"
-            old_period_end_raw = row.get("current_period_end")
-            if row.get("status") == "active" and old_period_end_raw:
-                from app.core.utils import parse_supabase_timestamp
-                old_period_end = parse_supabase_timestamp(old_period_end_raw)
-                if old_period_end and old_period_end > schedule_date:
-                    schedule_date = old_period_end
-                    remarks = "next autopay charge"
-            await _raise_subscription_charge(
-                cashfree_subscription_id,
-                schedule_date=schedule_date,
-                remarks=remarks,
-            )
-
-    elif event_type == "SUBSCRIPTION_PAYMENT_SUCCESS" and _is_successful_charge(data):
-        base_date = now
-        old_period_end_raw = row.get("current_period_end")
-        if old_period_end_raw:
-            from app.core.utils import parse_supabase_timestamp
-            old_period_end = parse_supabase_timestamp(old_period_end_raw)
-            if old_period_end and old_period_end > now:
-                base_date = old_period_end
-
-        new_period_end = base_date + timedelta(days=_SUBSCRIPTION_DAYS)
-        (
-            supabase.table("user_subscriptions")
-            .update(
-                {
-                    "status": "active",
-                    "autopay_enabled": True,
-                    "current_period_start": now.isoformat(),
-                    "current_period_end": new_period_end.isoformat(),
-                    "cashfree_payment_id": str(data.get("cf_payment_id") or data.get("payment_id") or ""),
-                    "cashfree_transaction_id": str(data.get("cf_txn_id") or ""),
-                    "updated_at": now.isoformat(),
-                }
-            )
-            .eq("id", row["id"])
-            .execute()
-        )
-        _send_activation_email_safe(
-            user_id=row["user_id"],
-            agent_id=row["agent_id"],
-            expiry_date=new_period_end,
-            amount=float(data.get("payment_amount") or data.get("amount") or 499.0),
-            payment_id=str(data.get("cf_payment_id") or data.get("payment_id") or ""),
-        )
-
-    elif event_type in ("SUBSCRIPTION_PAYMENT_FAILED", "SUBSCRIPTION_PAYMENT_CANCELLED"):
-        update_data = {
-            "autopay_enabled": row.get("status") == "active",
-            "updated_at": now.isoformat(),
-        }
-        if row.get("status") != "active":
-            update_data["status"] = "payment_failed"
-        (
-            supabase.table("user_subscriptions")
-            .update(update_data)
-            .eq("id", row["id"])
-            .execute()
-        )
-
-    return {"received": True}
-
 
 def _send_activation_email_safe(
     user_id: str, 
@@ -1004,7 +520,6 @@ async def get_payment_status(
         }
 
     row = response.data[0]
-    row = await _sync_autopay_authorization_from_cashfree(row)
     now = _now_utc()
     sub_status = row.get("status", "none")
     period_end_raw = row.get("current_period_end")
@@ -1048,6 +563,8 @@ async def renew_subscription(
     current_user=Depends(get_current_user),
 ):
     """Renew an existing subscription. Early renewal extends from current expiry."""
+    _ensure_cashfree_billing_enabled()
+
     if not settings.cashfree_app_id or not settings.cashfree_secret_key:
         raise HTTPException(status_code=400, detail="Payment provider is not configured.")
 

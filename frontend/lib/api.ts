@@ -13,10 +13,6 @@ declare global {
         paymentSessionId: string;
         redirectTarget?: "_self" | "_blank" | "_top" | "_modal";
       }) => Promise<{ error?: { message?: string } }>;
-      subscriptionsCheckout: (options: {
-        subsSessionId: string;
-        redirectTarget?: "_self" | "_blank" | "_top" | "_modal";
-      }) => Promise<{ error?: { message?: string } }>;
     };
   }
 }
@@ -185,17 +181,7 @@ export async function createPaymentOrder(
   );
 }
 
-export async function createAutopaySubscription(
-  agentId: string
-): Promise<{ subscription_session_id?: string; subscription_id?: string; status?: string }> {
-  return apiFetch<{ subscription_session_id?: string; subscription_id?: string; status?: string }>(
-    "/api/payment/create-autopay",
-    {
-      method: "POST",
-      body: JSON.stringify({ agent_id: agentId }),
-    }
-  );
-}
+
 
 export async function getSubscriptionStatus(
   agentId: string
@@ -216,14 +202,4 @@ export async function renewSubscription(
     }
   );
 }
-export async function cancelSubscription(
-  agentId: string
-): Promise<{ success: boolean; message: string }> {
-  return apiFetch<{ success: boolean; message: string }>(
-    "/api/payment/cancel",
-    {
-      method: "POST",
-      body: JSON.stringify({ agent_id: agentId }),
-    }
-  );
-}
+

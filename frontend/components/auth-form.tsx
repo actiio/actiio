@@ -36,14 +36,14 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
   const isSignIn = mode === "sign-in";
 
   useEffect(() => {
-    // If already signed in (e.g. Cashfree autopay redirected back to /sign-in),
+    // If already signed in (e.g. Cashfree redirected back to /sign-in),
     // redirect immediately rather than waiting for a new SIGNED_IN event.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         const search = new URLSearchParams(window.location.search);
         let nextPath = safeRelativePath(search.get("next"));
         
-        // Preserve autopay/subscription params if they were provided at the top level
+        // Preserve subscription params if they were provided at the top level
         nextPath = mergeQueryParams(nextPath, search);
         
         router.push(nextPath);

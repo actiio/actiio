@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     cashfree_env: str = Field(default="sandbox", validation_alias="CASHFREE_ENV")
     cashfree_plan_id: Optional[str] = Field(default=None, validation_alias="CASHFREE_PLAN_ID")
     cashfree_return_url: Optional[str] = Field(default=None, validation_alias="CASHFREE_RETURN_URL")
+    cashfree_billing_enabled: bool = Field(default=False, validation_alias="CASHFREE_BILLING_ENABLED")
     sales_assets_bucket: Optional[str] = Field(default="sales-assets", validation_alias="SALES_ASSETS_BUCKET")
     bypass_ssl: bool = Field(default=False, validation_alias="BYPASS_SSL")
     api_rate_limit_per_minute: int = Field(default=120, validation_alias="API_RATE_LIMIT_PER_MINUTE")

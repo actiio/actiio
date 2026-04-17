@@ -96,7 +96,6 @@ export type UserSubscription = {
   cashfree_order_id?: string | null;
   cashfree_payment_id?: string | null;
   cashfree_subscription_id?: string | null;
-  autopay_enabled: boolean;
   status: "inactive" | "payment_pending" | "active" | "expired" | "payment_failed";
   current_period_start: string | null;
   current_period_end: string | null;
@@ -109,7 +108,6 @@ export type SubscriptionStatus = {
   status: "none" | "inactive" | "payment_pending" | "active" | "expired" | "payment_failed";
   current_period_end: string | null;
   days_remaining: number;
-  autopay_enabled: boolean;
   cashfree_subscription_id?: string | null;
 };
 

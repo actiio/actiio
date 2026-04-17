@@ -52,7 +52,7 @@ export function safeRelativePath(value: string | null | undefined, fallback = "/
 
 /**
  * Merges top-level search parameters into a relative path's query string.
- * Useful for carrying over autopay/subscription params through a sign-in redirect.
+ * Useful for carrying over subscription params through a sign-in redirect.
  */
 export function mergeQueryParams(relativePath: string, params: URLSearchParams): string {
   try {

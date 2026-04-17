@@ -21,6 +21,10 @@ type ExtendedFilterOption = "needs_follow_up" | "active";
 type SortOption = "longest_waiting" | "recent_activity" | "newest_thread";
 const THREADS_PER_PAGE = 12;
 
+function isCashfreeBillingEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_CASHFREE_BILLING_ENABLED === "true";
+}
+
 function daysSince(timestamp: string | null) {
   if (!timestamp) return 0;
   const last = new Date(timestamp).getTime();
@@ -680,6 +684,11 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
   }
 
   async function handleActivateAgent() {
+    if (!isCashfreeBillingEnabled()) {
+      pushToast("Subscriptions are temporarily unavailable. Please contact support to activate your plan.", "error");
+      return;
+    }
+
     setIsActivatingAgent(true);
     try {
       const resp = await createPaymentOrder(agentId);
@@ -750,15 +759,21 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
           </div>
           <h2 className="text-3xl font-bold tracking-tight mb-4">Agent Not Active Yet</h2>
           <p className="text-brand-body/60 text-lg mb-10 leading-relaxed">
-            This agent is not active for your account yet. Start a plan to begin monitoring leads in this channel.
+            {isCashfreeBillingEnabled()
+              ? "This agent is not active for your account yet. Start a plan to begin monitoring leads in this channel."
+              : "Online subscription activation is temporarily unavailable. Please contact support to activate this agent."}
           </p>
           <Button
             size="lg"
             className="w-full py-8 text-xl font-bold"
-            disabled={isActivatingAgent}
+            disabled={isActivatingAgent || !isCashfreeBillingEnabled()}
             onClick={() => void handleActivateAgent()}
           >
-            {isActivatingAgent ? "Opening checkout..." : "Activate Agent"}
+            {isActivatingAgent
+              ? "Opening checkout..."
+              : isCashfreeBillingEnabled()
+                ? "Activate Agent"
+                : "Contact support"}
           </Button>
         </Card>
       </div>

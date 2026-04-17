@@ -13,7 +13,7 @@ export default async function SignInPage(props: {
   const searchParams = await props.searchParams;
   
   // Check if this is a payment return/handoff based on URL params
-  const isPaymentReturn = !!(searchParams.subscription_id || searchParams.order_id || searchParams.autopay);
+  const isPaymentReturn = !!(searchParams.subscription_id || searchParams.order_id);
 
   if (user) {
     // If already signed in, redirect immediately on the server
