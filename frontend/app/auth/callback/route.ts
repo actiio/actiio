@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 import { safeRelativePath } from '@/lib/sanitize'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   // Email confirmations should land on sign-in unless an explicit next path is provided.
@@ -19,12 +19,12 @@ export async function GET(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() {
-            return request.cookies.getAll()
+          async getAll() {
+            const cookieStore = await cookies()
+            return cookieStore.getAll()
           },
           setAll(cookiesToSet: any[]) {
             cookiesToSet.forEach(({ name, value, options }) => {
-              request.cookies.set(name, value)
               response.cookies.set(name, value, options)
             })
           },
