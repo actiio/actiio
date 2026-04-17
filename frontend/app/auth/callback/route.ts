@@ -11,50 +11,52 @@ export async function GET(request: Request) {
   const next = safeRelativePath(searchParams.get('next'), '/sign-in')
 
   if (code) {
-    const cookieStore = await cookies()
+    const nextPath = `${origin}${next}`
+    const response = NextResponse.redirect(nextPath)
+    
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll() {
-            return cookieStore.getAll()
+            return request.cookies.getAll()
           },
           setAll(cookiesToSet: any[]) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => {
-                cookieStore.set(name, value, options)
-              })
-            } catch (error) {
-              // The `setAll` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
-            }
+            cookiesToSet.forEach(({ name, value, options }) => {
+              request.cookies.set(name, value)
+              response.cookies.set(name, value, options)
+            })
           },
         },
       }
     )
     
-    // Exchange the code for a session
     const { error } = await supabase.auth.exchangeCodeForSession(code)
+    
     if (!error) {
       const forwardedHost = request.headers.get('x-forwarded-host')
       const isLocalEnv = process.env.NODE_ENV === 'development'
 
-      // Whitelist of allowed production hosts for redirect safety
-      const ALLOWED_HOSTS = [
-        "actiio.co",
-        "www.actiio.co",
-        "staging.actiio.co",
-      ]
+      const isAllowedHost = forwardedHost && (
+        forwardedHost.endsWith('.actiio.co') || 
+        forwardedHost === 'actiio.co' ||
+        forwardedHost.endsWith('.vercel.app')
+      )
 
       if (isLocalEnv) {
-        // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-        return NextResponse.redirect(`${origin}${next}`)
-      } else if (forwardedHost && ALLOWED_HOSTS.includes(forwardedHost)) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`)
+        return response
+      } else if (forwardedHost && isAllowedHost) {
+        // Update the redirect URL if we are on a whitelisted host
+        const finalUrl = new URL(next, `https://${forwardedHost}`)
+        const finalResponse = NextResponse.redirect(finalUrl.toString())
+        // Copy cookies to the new response
+        response.cookies.getAll().forEach((cookie) => {
+          finalResponse.cookies.set(cookie.name, cookie.value)
+        })
+        return finalResponse
       } else {
-        return NextResponse.redirect(`${origin}${next}`)
+        return response
       }
     }
   }

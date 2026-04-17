@@ -43,9 +43,15 @@ def sign_up(email: str, password: str) -> dict:
             raise HTTPException(status_code=400, detail="Failed to create user.")
 
         # Generate OUR custom confirmation link
+        # We explicitly point it to /auth/callback so the browser can exchange the token for a session cookie.
+        from app.core.config import get_settings
+        settings = get_settings()
+        redirect_to = f"{settings.frontend_url}/auth/callback"
+        
         link_response = supabase.auth.admin.generate_link({
             "type": "signup",
             "email": email,
+            "options": {"redirect_to": redirect_to}
         })
         
         if link_response.properties and link_response.properties.action_link:
