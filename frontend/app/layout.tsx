@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Inter } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
+import { CookieConsent } from "@/components/ui/cookie-consent";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" strategy="beforeInteractive" />
         <ToastProvider>
           {children}
+          <CookieConsent />
         </ToastProvider>
         <Analytics />
       </body>

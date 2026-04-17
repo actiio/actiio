@@ -475,32 +475,66 @@ def send_subscription_renewal_reminder(
     expiry_str = expiry_date.strftime("%B %d, %Y")
     resend.api_key = settings.resend_api_key
 
-    if autopay_enabled:
-        subject = f"🔄 Upcoming Renewal: Your {agent_name} Agent"
-        headline = "Your agent is renewing soon."
-        body = f"Your subscription for <strong>{agent_name}</strong> will automatically renew on <strong>{expiry_str}</strong>. No action is required from your side."
-        cta_text = "Manage Subscription"
-    else:
-        subject = f"⚠️ Your {agent_name} Agent expires in 3 days"
-        headline = "Don't let your follow-ups stop."
-        body = f"Your subscription for <strong>{agent_name}</strong> expires on <strong>{expiry_str}</strong>. Since autopay is not enabled, your agent will stop hunting for leads unless you renew manually."
-        cta_text = "Renew Now"
+    subject = f"⚠️ Your {agent_name} expires in 3 days"
+    headline = "Your agent's coverage is ending."
+    body = f"Your subscription for <strong>{agent_name}</strong> will expire on <strong>{expiry_str}</strong>. To ensure your leads are still monitored without interruption, please renew your subscription manually."
+    cta_text = "Renew Now"
 
     html = f"""
-    <div style="margin:0;padding:32px 16px;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111111;">
-      <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:48px;box-sizing:border-box;">
-        <div style="display:flex;align-items:center;gap:12px;font-size:24px;font-weight:700;letter-spacing:-0.02em;margin:0 0 24px;">
-          <img src="{logo_url}" alt="Actiio logo" width="32" height="32" style="display:block;width:32px;height:32px;border-radius:8px;" />
-          <span>Actiio</span>
-        </div>
-        <h1 style="font-size:26px;line-height:1.2;margin:0 0 16px;">{headline}</h1>
-        <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 28px;">{body}</p>
-        <a href="{dashboard_url}/billing" style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 22px;border-radius:8px;">
-          {cta_text}
-        </a>
-        <p style="font-size:13px;line-height:1.6;color:#777777;margin:32px 0 0;">Team Actiio · actiio.co</p>
-      </div>
-    </div>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin:0;padding:0;background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#ffffff;">
+        <tr>
+          <td align="center" style="padding: 40px 16px; background-color:#f8fafc;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:#ffffff;border-radius:24px;box-shadow:0 10px 25px rgba(0,0,0,0.05);border:1px solid #f1f5f9;">
+              <tr>
+                <td style="padding: 40px;">
+                  <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                    <tr>
+                      <td style="padding-bottom: 24px;">
+                        <table border="0" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td><img src="{logo_url}" alt="Actiio" width="32" height="32" style="display:block;border-radius:8px;"></td>
+                            <td style="padding-left:12px;font-size:24px;font-weight:700;color:#111111;letter-spacing:-0.02em;">Actiio</td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <h1 style="margin:0 0 16px;font-size:26px;line-height:1.2;font-weight:800;letter-spacing:-0.03em;color:#111111;">{headline}</h1>
+                        <p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:#4b5563;">{body}</p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 0 32px;">
+                        <a href="{dashboard_url}/billing" style="display:inline-block;background-color:#22c55e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 32px;border-radius:12px;">
+                          {cta_text}
+                        </a>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="height:1px;background-color:#eeeeee;"></td>
+                    </tr>
+                    <tr>
+                      <td style="padding-top:24px;font-size:13px;line-height:1.6;color:#9ca3af;">
+                        Team Actiio · <a href="https://actiio.co" style="color:#9ca3af;text-decoration:underline;">actiio.co</a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
     """
 
     try:
@@ -525,30 +559,70 @@ def send_subscription_expired_email(user_email: str, agent_name: str) -> None:
     resend.api_key = settings.resend_api_key
 
     html = f"""
-    <div style="margin:0;padding:32px 16px;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111111;">
-      <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:48px;box-sizing:border-box;">
-        <div style="display:flex;align-items:center;gap:12px;font-size:24px;font-weight:700;letter-spacing:-0.02em;margin:0 0 24px;">
-          <img src="{logo_url}" alt="Actiio logo" width="32" height="32" style="display:block;width:32px;height:32px;border-radius:8px;" />
-          <span>Actiio</span>
-        </div>
-        <h1 style="font-size:26px;line-height:1.2;margin:0 0 16px;">Your agent has expired.</h1>
-        <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 28px;">
-          The subscription for <strong>{agent_name}</strong> has ended. Your agent has stopped following up with leads. 
-          Reactivate now to restore service and resume your pipeline.
-        </p>
-        <a href="{dashboard_url}/billing" style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 22px;border-radius:8px;">
-          Reactivate Agent
-        </a>
-        <p style="font-size:13px;line-height:1.6;color:#777777;margin:32px 0 0;">Team Actiio · actiio.co</p>
-      </div>
-    </div>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin:0;padding:0;background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#ffffff;">
+        <tr>
+          <td align="center" style="padding: 40px 16px; background-color:#f8fafc;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:#ffffff;border-radius:24px;box-shadow:0 10px 25px rgba(0,0,0,0.05);border:1px solid #f1f5f9;">
+              <tr>
+                <td style="padding: 40px;">
+                  <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                    <tr>
+                      <td style="padding-bottom: 24px;">
+                        <table border="0" cellpadding="0" cellspacing="0">
+                          <tr>
+                            <td><img src="{logo_url}" alt="Actiio" width="32" height="32" style="display:block;border-radius:8px;"></td>
+                            <td style="padding-left:12px;font-size:24px;font-weight:700;color:#111111;letter-spacing:-0.02em;">Actiio</td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <h1 style="margin:0 0 16px;font-size:26px;line-height:1.2;font-weight:800;letter-spacing:-0.03em;color:#111111;">Your agent has expired.</h1>
+                        <p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:#4b5563;">
+                          The subscription for <strong>{agent_name}</strong> has ended. Your agent has stopped following up with leads. 
+                          Reactivate now to restore service and resume your pipeline.
+                        </p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px 0 32px;">
+                        <a href="{dashboard_url}/billing" style="display:inline-block;background-color:#22c55e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 32px;border-radius:12px;">
+                          Reactivate Agent
+                        </a>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="height:1px;background-color:#eeeeee;"></td>
+                    </tr>
+                    <tr>
+                      <td style="padding-top:24px;font-size:13px;line-height:1.6;color:#9ca3af;">
+                        Team Actiio · <a href="https://actiio.co" style="color:#9ca3af;text-decoration:underline;">actiio.co</a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
     """
 
     try:
         resend.Emails.send({
             "from": "Actiio <noreply@actiio.co>",
             "to": [user_email],
-            "subject": f"🚨 Action Required: Your {agent_name} Agent has expired",
+            "subject": f"🚨 Action Required: Your {agent_name} has expired",
             "html": html,
         })
     except Exception as exc:
