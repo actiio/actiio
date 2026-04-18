@@ -124,7 +124,7 @@ def send_subscription_activated_email(
       <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 15px; line-height: 2;">
         <tr>
           <td style="color: #6b7280;">Description</td>
-          <td align="right" style="font-weight: 700; color: #111827;">Actiio Agent: {agent_name}</td>
+          <td align="right" style="font-weight: 700; color: #111827;">{agent_name}</td>
         </tr>
         <tr>
           <td style="color: #6b7280;">Amount Paid</td>
@@ -151,13 +151,13 @@ def send_subscription_activated_email(
         </div>
         <h1 style="font-size:28px;line-height:1.2;margin:0 0 16px;">You're all set, {user_name}.</h1>
         <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 16px;">
-          Your agent is now active and ready to hunt for leads.
+          Your agent is active!
         </p>
         
         {receipt_html}
 
         <p style="font-size:16px;line-height:1.7;color:#444444;margin:0 0 28px;">
-          Head over to your dashboard to start syncing your Gmail and setting up follow-ups.
+          Head over to your dashboard to manage your leads and follow-ups.
         </p>
         <a href="{dashboard_url}" style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 22px;border-radius:8px;">
           Go to Dashboard
