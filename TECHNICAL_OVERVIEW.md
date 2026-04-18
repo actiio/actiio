@@ -337,7 +337,6 @@ If a Gmail connection has expired during sync, the error is caught, the connecti
 3. User is redirected to Google's OAuth consent screen requesting only the minimum required Gmail scopes:
    - `gmail.readonly` — read inbox threads
    - `gmail.send` — send replies
-   - `gmail.modify` — mark messages, modify labels
 4. Google redirects to `/api/gmail/callback` with the auth code
 5. Backend verifies the state token, exchanges the code for tokens, stores `access_token` + `refresh_token` in `gmail_connections`
 6. An immediate first sync runs in the background
