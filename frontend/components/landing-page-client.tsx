@@ -25,7 +25,7 @@ const AGENTS = [
       "Monitors your Gmail inbox for silent sales leads and generates smart follow-up drafts automatically. Review subject-aware replies, approve the best option, and send via Gmail without leaving the dashboard.",
     icon: "📧",
     status: "active",
-    price: "₹99/month",
+    price: "₹499/month",
     color: "from-brand-primary to-emerald-500",
     features: [
       "Inbox Monitoring",
@@ -136,14 +136,29 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
 
           {/* Middle: Links - Perfectly Centered */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden items-center gap-10 md:flex">
-            {["Agents Hub", "Pricing", "How it works"].map((item) => (
-              <a
-                key={item}
-                href={`#${item.toLowerCase().replace(/\s+/g, "-")}`}
-                className="text-sm font-bold text-brand-body/60 transition-colors hover:text-brand-primary whitespace-nowrap"
-              >
-                {item}
-              </a>
+            {[
+              { label: "Agents Hub", href: "#agents-hub" },
+              { label: "Pricing", href: "#pricing" },
+              { label: "How it works", href: "#how-it-works" },
+              { label: "About", href: "/about" },
+            ].map((item) => (
+              item.href.startsWith("#") ? (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  className="text-sm font-bold text-brand-body/60 transition-colors hover:text-brand-primary whitespace-nowrap"
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className="text-sm font-bold text-brand-body/60 transition-colors hover:text-brand-primary whitespace-nowrap"
+                >
+                  {item.label}
+                </Link>
+              )
             ))}
           </div>
 
@@ -402,7 +417,7 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                   <div className="mt-6 flex flex-col gap-5 border-t border-gray-100 pt-5 sm:mt-8 sm:flex-row sm:items-end sm:justify-between sm:pt-6">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/40">Price</p>
-                      <p className="mt-2 text-3xl font-black text-brand-heading sm:text-4xl">₹99<span className="text-base text-brand-body/50 sm:text-lg">/month</span></p>
+                      <p className="mt-2 text-3xl font-black text-brand-heading sm:text-4xl">₹499<span className="text-base text-brand-body/50 sm:text-lg">/month</span></p>
                     </div>
                     <Link href={isAuthenticated ? "/agents" : "/sign-up"}>
                       <Button className="w-full rounded-full px-8 font-black shadow-xl shadow-brand-primary/20 sm:w-auto">
@@ -615,17 +630,14 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
               <div className="space-y-4">
                 <h4 className="text-xs font-black uppercase tracking-widest text-brand-heading">Platform</h4>
                 <ul className="space-y-2 text-sm font-bold text-brand-body/60">
-                  <li><a href="#agents-hub" className="hover:text-brand-primary transition-colors">Agents Hub</a></li>
-                  <li><a href="#" className="hover:text-brand-primary transition-colors">Pricing Hub</a></li>
-                  <li><a href="#" className="hover:text-brand-primary transition-colors">API Documentation</a></li>
+                  <li><a href="#pricing" className="hover:text-brand-primary transition-colors">Pricing</a></li>
                 </ul>
               </div>
               <div className="space-y-4">
                 <h4 className="text-xs font-black uppercase tracking-widest text-brand-heading">Company</h4>
                 <ul className="space-y-2 text-sm font-bold text-brand-body/60">
-                  <li><a href="#" className="hover:text-brand-primary transition-colors">About Actiio</a></li>
-                  <li><a href="#" className="hover:text-brand-primary transition-colors">The Vision</a></li>
-                  <li><a href="#" className="hover:text-brand-primary transition-colors">Contact Support</a></li>
+                  <li><Link href="/about" className="hover:text-brand-primary transition-colors">About Actiio</Link></li>
+                  <li><Link href="/contact" className="hover:text-brand-primary transition-colors">Contact Support</Link></li>
                 </ul>
               </div>
             </div>
@@ -634,9 +646,9 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
           <div className="pt-8 border-t border-gray-50 flex flex-col sm:flex-row justify-between items-center gap-6">
             <p className="text-xs font-bold text-brand-body/40">© {new Date().getFullYear()} Actiio AI. Made for the builders.</p>
             <div className="flex gap-8 text-[10px] font-black uppercase tracking-widest text-brand-body/40">
-              <a href="#" className="hover:text-brand-heading transition-colors">Privacy</a>
-              <a href="#" className="hover:text-brand-heading transition-colors">Terms</a>
-              <a href="#" className="hover:text-brand-heading transition-colors">Trust</a>
+              <Link href="/privacy" className="hover:text-brand-heading transition-colors">Privacy</Link>
+              <Link href="/terms" className="hover:text-brand-heading transition-colors">Terms</Link>
+              <Link href="/refund-policy" className="hover:text-brand-heading transition-colors">Refund Policy</Link>
             </div>
           </div>
         </div>
