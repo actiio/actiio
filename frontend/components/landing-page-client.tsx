@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 /* ─── Data ─────────────────────────────────────────────────────────────────── */
@@ -121,8 +122,11 @@ function StatCard({ val, suffix, label, delay }: { val: number; suffix: string; 
 /* ─── Component ─────────────────────────────────────────────────────────────── */
 
 export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
+  const [signedIn, setSignedIn] = useState(isAuthenticated);
+  const [signingOut, setSigningOut] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
   const { ref: psRef, inView: psInView } = useInView();
   const { ref: hiwRef, inView: hiwInView } = useInView();
@@ -134,6 +138,10 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    setSignedIn(isAuthenticated);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -151,12 +159,19 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
   }, []);
 
   const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignedIn(false);
+
     try {
       const { supabase } = await import("@/lib/supabase");
       await supabase.auth.signOut();
-      window.location.reload();
-    } catch (err: any) {
+      router.refresh();
+    } catch (err: unknown) {
+      setSignedIn(true);
       console.error("Sign out error:", err);
+    } finally {
+      setSigningOut(false);
     }
   };
 
@@ -184,14 +199,16 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
           </Link>
 
           <div className="lp__nav-actions">
-            {!isAuthenticated ? (
+            {!signedIn ? (
               <>
                 <Link href="/sign-in" className="lp__nav-link">Sign In</Link>
                 <Link href="/sign-up" className="lp__btn lp__btn--primary lp__btn--sm">Get Started</Link>
               </>
             ) : (
               <>
-                <button onClick={handleSignOut} className="lp__nav-link lp__nav-link--muted">Sign Out</button>
+                <button onClick={handleSignOut} className="lp__nav-link lp__nav-link--muted" disabled={signingOut}>
+                  {signingOut ? "Signing Out..." : "Sign Out"}
+                </button>
                 <Link href="/agents" className="lp__btn lp__btn--primary lp__btn--sm">Go to Platform</Link>
               </>
             )}
@@ -287,8 +304,7 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
         <div className="lp__video-header">
           <p className="lp__eyebrow" style={{ textAlign: "center" }}>See it in action</p>
           <h2 className="lp__section-title" style={{ textAlign: "center", marginBottom: "0" }}>
-            From inbox to deal, in{" "}
-            <span className="lp__green">minutes.</span>
+            From inbox to deal, in minutes.
           </h2>
           <p className="lp__section-sub" style={{ textAlign: "center" }}>
             Watch how Actiio detects a cold thread, drafts the perfect follow-up, and puts you back in the conversation.
