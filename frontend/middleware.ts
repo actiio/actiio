@@ -26,7 +26,7 @@ function isSupabaseTlsError(error: unknown): boolean {
   );
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   let response = NextResponse.next({
     request: {
@@ -66,7 +66,7 @@ export async function proxy(request: NextRequest) {
   } catch (error) {
     if (isSupabaseTlsError(error)) {
       console.warn(
-        "[proxy] Supabase TLS validation failed. Check your system clock and NEXT_PUBLIC_SUPABASE_URL certificate validity."
+        "[middleware] Supabase TLS validation failed. Check your system clock and NEXT_PUBLIC_SUPABASE_URL certificate validity."
       );
       return response;
     }
