@@ -1,11 +1,6 @@
-"use client";
-
 import StaticPageLayout from "@/components/static-page-layout";
-import { useState } from "react";
 
 export default function TermsPage() {
-  const [loaded, setLoaded] = useState(false);
-
   return (
     <StaticPageLayout
       title="Terms of Service"
@@ -30,18 +25,11 @@ export default function TermsPage() {
 
         {/* PDF Embed */}
         <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 shadow-sm">
-          {!loaded && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-50 z-10">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-primary/20 border-t-brand-primary" />
-              <p className="text-sm font-medium text-brand-body/50">Loading document…</p>
-            </div>
-          )}
           <iframe
             src="/terms-of-service.pdf"
             className="w-full"
             style={{ height: "80vh", minHeight: "600px" }}
             title="Actiio Terms of Service"
-            onLoad={() => setLoaded(true)}
           />
         </div>
 

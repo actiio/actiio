@@ -12,13 +12,14 @@ const nextConfig: NextConfig = {
       "font-src 'self' data: https://fonts.gstatic.com",
       `connect-src 'self' https://*.supabase.co https://api.cashfree.com ${apiBaseUrl} https://va.vercel-scripts.com`,
       "frame-src 'self' https://sdk.cashfree.com https://api.cashfree.com https://sandbox.cashfree.com",
-      "frame-ancestors 'none'",
+      "frame-ancestors 'self'",
+      "media-src 'self'",
     ].join("; ");
 
     return [{
       source: "/(.*)",
       headers: [
-        { key: "X-Frame-Options", value: "DENY" },
+        { key: "X-Frame-Options", value: "SAMEORIGIN" },
         { key: "X-Content-Type-Options", value: "nosniff" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         {
