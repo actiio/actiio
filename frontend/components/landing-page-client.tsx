@@ -205,15 +205,15 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
           <div className="lp__nav-actions">
             {!signedIn ? (
               <>
-                <Link
-                  href="/sign-in"
+                <Link 
+                  href="/sign-in" 
                   className="lp__nav-link"
                   onClick={() => setLoading("sign-in")}
                 >
                   {loading === "sign-in" ? <span className="lp__loader" /> : "Sign In"}
                 </Link>
-                <Link
-                  href="/sign-up"
+                <Link 
+                  href="/sign-up" 
                   className="lp__btn lp__btn--primary lp__btn--sm"
                   onClick={() => setLoading("get-started")}
                 >
@@ -222,15 +222,15 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
               </>
             ) : (
               <>
-                <button
-                  onClick={handleSignOut}
-                  className="lp__nav-link lp__nav-link--muted"
+                <button 
+                  onClick={handleSignOut} 
+                  className="lp__nav-link lp__nav-link--muted" 
                   disabled={loading === "sign-out"}
                 >
                   {loading === "sign-out" ? <span className="lp__loader" /> : "Sign Out"}
                 </button>
-                <Link
-                  href="/agents"
+                <Link 
+                  href="/agents" 
                   className="lp__btn lp__btn--primary lp__btn--sm"
                   onClick={() => setLoading("platform")}
                 >
@@ -280,12 +280,13 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
           </h1>
 
           <p className="lp__sub lp__anim" style={{ animationDelay: "160ms" }}>
-            From inbox to deal, in <span className="lp__green" style={{ whiteSpace: "nowrap" }}>minutes.</span>
+            Actiio is an AI platform built for sales workflows. Our specialized agent
+            ensures your warm leads never go cold — starting straight from your inbox.
           </p>
 
           <div className="lp__ctas lp__anim" style={{ animationDelay: "240ms" }}>
-            <Link
-              href={isAuthenticated ? "/agents" : "/sign-up"}
+            <Link 
+              href={isAuthenticated ? "/agents" : "/sign-up"} 
               className="lp__btn lp__btn--hero lp__btn--glow"
               onClick={() => setLoading(isAuthenticated ? "enter" : "automate")}
             >
@@ -315,6 +316,13 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                 <path d="M7 1l1.6 3.3 3.6.5-2.6 2.5.6 3.6L7 9.3 3.8 11l.6-3.6L2 4.8l3.6-.5z" />
               </svg>
               No credit card required
+            </span>
+            <span className="lp__trust-dot" />
+            <span className="lp__trust-item">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="lp__trust-icon">
+                <rect x="2" y="6" width="10" height="7" rx="1.5" /><path d="M4.5 6V4a2.5 2.5 0 015 0v2" />
+              </svg>
+              SOC 2 ready infrastructure
             </span>
             <span className="lp__trust-dot" />
             <span className="lp__trust-item">
@@ -457,8 +465,8 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
                 Join the teams that use Actiio to maintain deal momentum
                 with zero extra admin effort.
               </p>
-              <Link
-                href={isAuthenticated ? "/agents" : "/sign-up"}
+              <Link 
+                href={isAuthenticated ? "/agents" : "/sign-up"} 
                 className="lp__btn lp__btn--hero lp__btn--glow"
                 onClick={() => setLoading(isAuthenticated ? "enter-bottom" : "get-started-bottom")}
               >
