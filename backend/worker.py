@@ -14,7 +14,7 @@ from services.email_service import (
     send_subscription_renewal_reminder,
     send_subscription_expired_email
 )
-from app.core.utils import parse_supabase_timestamp
+from app.core.utils import mask_email, parse_supabase_timestamp
 from datetime import datetime, timedelta, timezone
 
 logging.basicConfig(
@@ -158,7 +158,12 @@ def send_all_weekly_digests() -> None:
             if pending_count > 0 or active_count > 0:
                 send_weekly_digest_email(email, pending_count, active_count)
                 sent_count += 1
-                logger.info("Sent weekly digest to %s (pending=%d, active=%d)", email, pending_count, active_count)
+                logger.info(
+                    "Sent weekly digest to %s (pending=%d, active=%d)",
+                    mask_email(email),
+                    pending_count,
+                    active_count,
+                )
         
         except Exception as exc:
             logger.error("Failed to process weekly digest for user %s: %s", user_id, exc)

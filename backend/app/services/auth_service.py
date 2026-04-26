@@ -31,6 +31,7 @@ def _extract_error_text(error: Exception) -> str:
 def sign_up(email: str, password: str) -> dict:
     # Use Supabase Admin to create the user.
     # This prevents the default Supabase email from being sent.
+    generic_signup_message = "If this email is new, you'll receive a confirmation shortly."
     try:
         user_response = supabase.auth.admin.create_user({
             "email": email,
@@ -59,7 +60,7 @@ def sign_up(email: str, password: str) -> dict:
         
         # We don't return a session because the user is not confirmed yet.
         # This matches the 'Confirm Email: ON' behavior.
-        return {"message": "Please check your email to confirm your account."}
+        return {"message": generic_signup_message}
 
     except HTTPException:
         raise
@@ -79,7 +80,7 @@ def sign_up(email: str, password: str) -> dict:
             "email address is already registered",
         ]
         if any(p in error_text for p in duplicate_phrases):
-            detail = "An account with this email already exists. Please sign in instead."
+            return {"message": generic_signup_message}
         elif "password" in error_text and ("weak" in error_text or "at least" in error_text or "too short" in error_text):
             detail = "Password is too weak. Please use a stronger password."
         elif "invalid" in error_text and "email" in error_text:
@@ -107,10 +108,10 @@ def get_user_from_token(token: str):
         user_response = supabase.auth.get_user(token)
     except Exception as exc:
         logger.warning("Auth token validation failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token") from exc
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed") from exc
 
     if user_response.user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found for token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed")
 
     return user_response.user
 

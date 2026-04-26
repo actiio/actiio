@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { hasUnsafeControlChars, mergeQueryParams, safeRelativePath, sanitizeEmail } from "@/lib/sanitize";
 import { supabase } from "@/lib/supabase";
-import { useToast } from "@/components/ui/toast";
+
+let pendingSignInEmailPrefill = "";
 
 function toFriendlyAuthError(message: string): string {
   const normalized = message.trim().toLowerCase();
@@ -26,14 +27,20 @@ function toFriendlyAuthError(message: string): string {
 export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-in" | "sign-up"; isSilent?: boolean }) {
   const router = useRouter();
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const initialEmail = searchParams?.get("email") || "";
+  const initialEmail = mode === "sign-in" ? pendingSignInEmailPrefill : "";
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { pushToast } = useToast();
 
   const isSignIn = mode === "sign-in";
+
+  useEffect(() => {
+    if (mode === "sign-in" && pendingSignInEmailPrefill) {
+      setEmail(pendingSignInEmailPrefill);
+      pendingSignInEmailPrefill = "";
+    }
+  }, [mode]);
 
   useEffect(() => {
     // If already signed in (e.g. Cashfree redirected back to /sign-in),
@@ -116,27 +123,13 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
     }
 
     if (authError) {
-      if (!isSignIn && (authError.message.toLowerCase().includes("already registered") || authError.message.toLowerCase().includes("already exists"))) {
-        pushToast("An account already exists with this email. Please sign in instead.");
-        router.push(`/sign-in?email=${encodeURIComponent(safeEmail)}`);
-        return;
-      }
       setError(toFriendlyAuthError(authError.message));
       setLoading(false);
       return;
     }
 
     if (!isSignIn) {
-      // Supabase email enumeration protection: if the user already exists, 
-      // authResult.data.user?.identities is often an empty array [].
-      const user = authResult.data?.user;
-      if (user && user.identities && user.identities.length === 0) {
-        pushToast("An account already exists with this email. Please sign in instead.");
-        router.push(`/sign-in?email=${encodeURIComponent(safeEmail)}`);
-        return;
-      }
-
-      setError("Please check your email to confirm your account.");
+      setError(authResult.data?.message || "If this email is new, you'll receive a confirmation shortly.");
       setLoading(false);
       return;
     }

@@ -389,7 +389,7 @@ alter table public.processed_webhooks enable row level security;
 
 -- Policies for Agents & Subscriptions
 drop policy if exists "agents_select_all" on public.agents;
-create policy "agents_select_all" on public.agents for select using (true);
+create policy "agents_select_all" on public.agents for select using (auth.uid() IS NOT NULL);
 
 drop policy if exists "user_subscriptions_select_own" on public.user_subscriptions;
 create policy "user_subscriptions_select_own" on public.user_subscriptions for select using (auth.uid() = user_id);

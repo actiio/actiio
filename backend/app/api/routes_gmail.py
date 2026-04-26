@@ -266,11 +266,11 @@ def gmail_callback(
 @limiter.limit("10/hour", key_func=user_or_ip_key_func)
 def gmail_sync(
     request: Request,
-    payload: dict[str, Any] | None = Body(default=None),
+    payload: GmailAgentRequest = Body(default_factory=GmailAgentRequest),
     current_user=Depends(get_current_user),
     _=Depends(require_active_subscription),
 ):
-    agent_id = _resolve_agent_id_from_payload(payload)
+    agent_id = validate_agent_id(payload.agent_id)
     try:
         credentials = get_credentials(current_user.id, agent_id=agent_id)
         service = build("gmail", "v1", credentials=credentials, cache_discovery=False)
@@ -400,10 +400,10 @@ def gmail_status(agent_id: str = Query(default="gmail_followup"), current_user=D
 
 @router.post("/disconnect")
 def gmail_disconnect(
-    payload: dict[str, Any] | None = Body(default=None),
+    payload: GmailAgentRequest = Body(default_factory=GmailAgentRequest),
     current_user=Depends(get_current_user),
 ):
-    agent_id = _resolve_agent_id_from_payload(payload)
+    agent_id = validate_agent_id(payload.agent_id)
     (
         supabase.table("gmail_connections")
         .update(

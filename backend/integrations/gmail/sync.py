@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from google.auth.exceptions import RefreshError, TransportError
 
 from app.core.supabase import get_supabase
-from app.core.utils import parse_supabase_timestamp, sanitize_ai_context, sanitize_email_content
+from app.core.utils import mask_email, parse_supabase_timestamp, sanitize_ai_context, sanitize_email_content
 from integrations.gmail.parser import parse_thread
 from pipeline.lead_classifier import classify_is_lead
 from integrations.gmail.auth import GmailConnectionExpiredError
@@ -85,7 +85,7 @@ def _handle_gmail_disconnection(
         "Gmail disconnection detected for user_id=%s agent_id=%s gmail_email=%s: %s",
         user_id,
         agent_id,
-        gmail_label,
+        mask_email(gmail_label),
         exc,
     )
 
@@ -98,8 +98,8 @@ def _handle_gmail_disconnection(
         "Gmail disconnection alert processed for user_id=%s agent_id=%s gmail_email=%s user_email=%s",
         user_id,
         agent_id,
-        gmail_label,
-        user_email or "unknown",
+        mask_email(gmail_label),
+        mask_email(user_email or ""),
     )
 
 

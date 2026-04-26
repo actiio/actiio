@@ -1,7 +1,6 @@
 import logging
 import os
 import ssl
-from urllib.parse import urlparse
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,22 +29,13 @@ if settings.app_env == "development" and settings.bypass_ssl:
 app = FastAPI(title=settings.app_name)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-allowed_origin = (settings.frontend_url or "http://localhost:3000").strip().rstrip("/")
-allowed_origins = {allowed_origin, "http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"}
-
-# Local dev hardening: allow localhost/127.0.0.1 equivalents on same port.
-parsed = urlparse(allowed_origin)
-if parsed.scheme in {"http", "https"} and parsed.hostname in {"localhost", "127.0.0.1"} and parsed.port:
-    allowed_origins.add(f"{parsed.scheme}://localhost:{parsed.port}")
-    allowed_origins.add(f"{parsed.scheme}://127.0.0.1:{parsed.port}")
-    # Local dev convenience when Next auto-switches between 3000 and 3001.
-    for dev_port in (3000, 3001):
-        allowed_origins.add(f"{parsed.scheme}://localhost:{dev_port}")
-        allowed_origins.add(f"{parsed.scheme}://127.0.0.1:{dev_port}")
+origins = [os.getenv("FRONTEND_URL", "https://actiio.co")]
+if os.getenv("APP_ENV") == "development":
+    origins += ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=sorted(allowed_origins),
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],

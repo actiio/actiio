@@ -119,6 +119,14 @@ def _urlsafe_b64decode(value: str) -> bytes | None:
 
 _logger = logging.getLogger(__name__)
 
+
+def mask_email(email: str) -> str:
+    try:
+        user, domain = email.split("@", 1)
+        return f"{user[:2]}***@{domain}"
+    except Exception:
+        return "***"
+
 def sanitize_email_content(text: str, *, thread_id: str = "") -> str:
     """
     Sanitize email content before passing to AI to prevent prompt injection.

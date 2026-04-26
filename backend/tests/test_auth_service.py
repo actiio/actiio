@@ -36,11 +36,9 @@ def test_sign_up_returns_specific_error_for_duplicate_email() -> None:
     auth_service.supabase = _FakeSupabase()
 
     try:
-        try:
-            auth_service.sign_up("test@example.com", "Password123!")
-            raise AssertionError("Expected duplicate email signup to fail")
-        except HTTPException as exc:
-            assert exc.status_code == 400
-            assert exc.detail == "An account with this email already exists. Please sign in instead."
+        result = auth_service.sign_up("test@example.com", "Password123!")
+        assert result == {
+            "message": "If this email is new, you'll receive a confirmation shortly."
+        }
     finally:
         auth_service.supabase = original_supabase
