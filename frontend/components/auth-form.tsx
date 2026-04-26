@@ -44,24 +44,7 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
   }, [mode]);
 
   useEffect(() => {
-    // If already signed in (e.g. Cashfree redirected back to /sign-in),
-    // redirect immediately rather than waiting for a new SIGNED_IN event.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        const search = new URLSearchParams(window.location.search);
-        let nextPath = safeRelativePath(search.get("next"));
-        
-        // Preserve subscription params if they were provided at the top level
-        nextPath = mergeQueryParams(nextPath, search);
-        
-        router.push(nextPath);
-        router.refresh();
-      }
-    }).catch(err => {
-      console.error("Session check failed:", err);
-    });
-
-    // Also handle cases where auth state changes (e.g. magic links, login completion)
+    // Handle cases where auth state changes (e.g. magic links, login completion)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN") {
         const search = new URLSearchParams(window.location.search);
@@ -220,7 +203,10 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
         <p className="text-sm text-brand-body/60">
           {isSignIn ? "No account yet?" : "Already have an account?"}{" "}
           <Link
-            href={isSignIn ? "/sign-up" : "/sign-in"}
+            href={isSignIn 
+              ? (searchParams ? `/sign-up?${searchParams.toString()}` : "/sign-up")
+              : (searchParams ? `/sign-in?${searchParams.toString()}` : "/sign-in")
+            }
             className="font-bold text-brand-heading hover:text-brand-primary transition-colors hover:underline"
           >
             {isSignIn ? "Create one" : "Sign in"}
