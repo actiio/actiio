@@ -32,6 +32,7 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const isSignIn = mode === "sign-in";
 
@@ -79,6 +80,7 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setNotice(null);
     const safeEmail = sanitizeEmail(email);
     if (hasUnsafeControlChars(password)) {
       setError("Password contains unsupported control characters.");
@@ -129,7 +131,10 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
     }
 
     if (!isSignIn) {
-      setError(authResult.data?.message || "If this email is new, you'll receive a confirmation shortly.");
+      setNotice(
+        authResult.data?.message ||
+        "Check your email for a confirmation link. If this email is already registered, you won't receive another confirmation email."
+      );
       setLoading(false);
       return;
     }
@@ -194,8 +199,14 @@ export function AuthForm({ mode = "sign-in", isSilent = false }: { mode?: "sign-
           )}
         </div>
 
+        {notice && (
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-700">
+            {notice}
+          </div>
+        )}
+
         {error && (
-          <div className={`p-4 rounded-xl text-sm ${error.includes("check your email") ? "bg-blue-50 text-blue-700 border border-blue-100" : "bg-red-50 text-red-600 border border-red-100"}`}>
+          <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
             {error}
           </div>
         )}

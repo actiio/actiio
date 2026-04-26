@@ -273,6 +273,7 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isActivatingAgent, setIsActivatingAgent] = useState(false);
+  const [isCheckingSubscriptionStatus, setIsCheckingSubscriptionStatus] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [gmailStatus, setGmailStatus] = useState<"connected" | "disconnected" | null>(null);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
@@ -702,10 +703,13 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
         return;
       }
       const cashfree = window.Cashfree({ mode: cashfreeMode });
-      await cashfree.checkout({
+      const result = await cashfree.checkout({
         paymentSessionId: resp.payment_session_id,
         redirectTarget: "_modal",
       });
+      if (result?.error?.message) {
+        throw new Error(result.error.message);
+      }
       // Stay in loading state while polling
       await pollUntilActive();
     } catch (error) {
@@ -713,6 +717,26 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
       pushToast(message, "error");
     } finally {
       setIsActivatingAgent(false);
+    }
+  }
+
+  async function handleCheckSubscriptionStatus() {
+    setIsCheckingSubscriptionStatus(true);
+    try {
+      const status = await fetchSubStatus();
+      if (status === "active") {
+        pushToast("Subscription activated.");
+        await fetchThreads();
+        void refreshGmailStatus();
+      } else if (status === "payment_pending") {
+        pushToast("Still waiting for Cashfree confirmation.");
+      } else if (status === "payment_failed") {
+        pushToast("Payment failed. Please try again.", "error");
+      } else {
+        pushToast("Payment not confirmed yet. You can retry checkout.", "error");
+      }
+    } finally {
+      setIsCheckingSubscriptionStatus(false);
     }
   }
 
@@ -759,22 +783,39 @@ export function DashboardClient({ agentId = "gmail_followup" }: { agentId?: stri
           </div>
           <h2 className="text-3xl font-bold tracking-tight mb-4">Agent Not Active Yet</h2>
           <p className="text-brand-body/60 text-lg mb-10 leading-relaxed">
-            {isCashfreeBillingEnabled()
-              ? "This agent is not active for your account yet. Start a plan to begin monitoring leads in this channel."
-              : "Online subscription activation is temporarily unavailable. Please contact support to activate this agent."}
-          </p>
-          <Button
-            size="lg"
-            className="w-full py-8 text-xl font-bold"
-            disabled={isActivatingAgent || !isCashfreeBillingEnabled()}
-            onClick={() => void handleActivateAgent()}
-          >
-            {isActivatingAgent
-              ? "Opening checkout..."
+            {subscriptionStatus === "payment_pending"
+              ? "We’re waiting for Cashfree to confirm your payment. If checkout did not open or was interrupted, you can safely retry it."
               : isCashfreeBillingEnabled()
-                ? "Activate Agent"
-                : "Contact support"}
-          </Button>
+                ? "This agent is not active for your account yet. Start a plan to begin monitoring leads in this channel."
+                : "Online subscription activation is temporarily unavailable. Please contact support to activate this agent."}
+          </p>
+          <div className="flex flex-col gap-3">
+            <Button
+              size="lg"
+              className="w-full py-8 text-xl font-bold"
+              disabled={isActivatingAgent || !isCashfreeBillingEnabled()}
+              onClick={() => void handleActivateAgent()}
+            >
+              {isActivatingAgent
+                ? "Opening checkout..."
+                : subscriptionStatus === "payment_pending"
+                  ? "Retry Payment"
+                  : isCashfreeBillingEnabled()
+                    ? "Activate Agent"
+                    : "Contact support"}
+            </Button>
+            {subscriptionStatus === "payment_pending" && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full py-6 text-base font-bold"
+                disabled={isCheckingSubscriptionStatus}
+                onClick={() => void handleCheckSubscriptionStatus()}
+              >
+                {isCheckingSubscriptionStatus ? "Checking..." : "Check Payment Status"}
+              </Button>
+            )}
+          </div>
         </Card>
       </div>
     );

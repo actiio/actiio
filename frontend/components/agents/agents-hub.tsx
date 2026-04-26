@@ -344,6 +344,28 @@ export function AgentsHub() {
     }
   }
 
+  async function handleRetryPendingPayment(agentId: string) {
+    if (!isCashfreeBillingEnabled()) {
+      pushToast("Payments are temporarily unavailable. Please contact support.", "error");
+      return;
+    }
+
+    setPaymentLoading(agentId);
+    try {
+      const resp = await createPaymentOrder(agentId);
+      if (!resp.payment_session_id) {
+        throw new Error("No payment session returned.");
+      }
+      await openCashfreeCheckout(resp.payment_session_id);
+      await pollUntilActive(agentId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not restart payment.";
+      pushToast(message, "error");
+    } finally {
+      setPaymentLoading(null);
+    }
+  }
+
 
 
   async function handleWaitlist(agentId: string) {
@@ -491,6 +513,7 @@ export function AgentsHub() {
 
                     if (isPending) {
                       const isCheckingStatus = statusLoadingIds.includes(agent.id);
+                      const isRetryingPayment = paymentLoading === agent.id;
                       return (
                         <Card key={agent.id} className="rounded-2xl border border-gray-100 p-6 hover:shadow-md transition">
                           <div className="flex items-start gap-3">
@@ -503,9 +526,18 @@ export function AgentsHub() {
                             </div>
                           </div>
                           <p className="mt-5 text-sm leading-relaxed text-gray-600">
-                            We’re waiting for Cashfree to confirm your payment. This usually takes a minute.
+                            We’re waiting for Cashfree to confirm your payment. If checkout did not open or got interrupted,
+                            you can safely retry the payment.
                           </p>
                           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                            <Button
+                              variant="outline"
+                              className="rounded-full px-6 font-bold"
+                              disabled={isRetryingPayment}
+                              onClick={() => void handleRetryPendingPayment(agent.id)}
+                            >
+                              {isRetryingPayment ? "Opening checkout..." : "Retry payment"}
+                            </Button>
                             <Button
                               className="rounded-full bg-brand-primary px-6 font-bold hover:bg-brand-primary/90"
                               disabled={isCheckingStatus}

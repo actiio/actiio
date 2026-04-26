@@ -31,7 +31,10 @@ def _extract_error_text(error: Exception) -> str:
 def sign_up(email: str, password: str) -> dict:
     # Use Supabase Admin to create the user.
     # This prevents the default Supabase email from being sent.
-    generic_signup_message = "If this email is new, you'll receive a confirmation shortly."
+    generic_signup_message = (
+        "Check your email for a confirmation link. "
+        "If this email is already registered, you won't receive another confirmation email."
+    )
     try:
         user_response = supabase.auth.admin.create_user({
             "email": email,
