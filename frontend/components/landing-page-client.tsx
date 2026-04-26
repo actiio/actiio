@@ -340,7 +340,7 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
         <div className="lp__video-header">
           <p className="lp__eyebrow" style={{ textAlign: "center" }}>See it in action</p>
           <h2 className="lp__section-title" style={{ textAlign: "center", marginBottom: "0" }}>
-            From inbox to deal, in minutes.
+            From inbox to deal, in <span className="lp__green" style={{ whiteSpace: "nowrap" }}>minutes.</span>
           </h2>
           <p className="lp__section-sub" style={{ textAlign: "center" }}>
             Watch how Actiio detects a cold thread, drafts the perfect follow-up, and puts you back in the conversation.
