@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
 import { CookieConsent } from "@/components/ui/cookie-consent";
 import { Analytics } from "@vercel/analytics/next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <CookieConsent />
         </ToastProvider>
         <Analytics />
+        <GoogleAnalytics gaId="G-YT7PK885LC" />
       </body>
     </html>
   );
