@@ -54,7 +54,6 @@ export default function StaticPageLayout({
         <div className="mt-4 flex justify-center gap-6 text-[10px] font-black uppercase tracking-widest text-brand-body/40">
           <Link href="/privacy" className="hover:text-brand-heading transition-colors">Privacy</Link>
           <Link href="/terms" className="hover:text-brand-heading transition-colors">Terms</Link>
-          <Link href="/refund-policy" className="hover:text-brand-heading transition-colors">Refund Policy</Link>
         </div>
       </footer>
     </div>

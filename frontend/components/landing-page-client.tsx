@@ -1,676 +1,1164 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import Image from "next/image";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { Dialog } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/lib/supabase";
-import { useToast } from "@/components/ui/toast";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
+/* ─── Data ─────────────────────────────────────────────────────────────────── */
 
-
-const AGENTS = [
+const STEPS = [
   {
-    id: "gmail_followup",
-    name: "Gmail Follow-up Agent",
-    tagline: "Operational & Live",
-    desc: "Monitor your email inbox for silent leads and generate smart follow-up drafts automatically.",
-    longDesc:
-      "Monitors your Gmail inbox for silent sales leads and generates smart follow-up drafts automatically. Review subject-aware replies, approve the best option, and send via Gmail without leaving the dashboard.",
-    icon: "📧",
-    status: "active",
-    price: "₹499/month",
-    color: "from-brand-primary to-emerald-500",
-    features: [
-      "Inbox Monitoring",
-      "Subject-Aware Drafts",
-      "Reply via Gmail",
-      "Silence Detection",
-      "Context-Aware Follow-ups",
-    ],
+    num: "01",
+    emoji: "📬",
+    title: "Connect your Gmail",
+    desc: "Link your inbox in seconds. Actiio reads your sales conversations immediately — no manual setup.",
+    color: "rgba(0,191,99,0.15)",
+    glow: "rgba(0,191,99,0.4)",
   },
   {
-    id: "coming_soon",
-    name: "More Agents Coming Soon",
-    tagline: "Product Pipeline",
-    desc: "Lead scoring, cold outreach, proposal generation and more are on the way.",
-    longDesc:
-      "Actiio is expanding beyond follow-up. Lead Scorer, Cold Outreach, Proposal Generator, and other workflow-specific agents will ship as separate products with their own subscriptions and setup flows.",
-    icon: "✨",
-    status: "coming_soon",
-    color: "from-purple-500 to-pink-600",
-    features: [
-      "Lead Scoring",
-      "Cold Outreach",
-      "Proposal Generation",
-      "More Channel Coverage",
-      "Additional Sales Workflows",
-    ],
+    num: "02",
+    emoji: "🔍",
+    title: "Find at-risk deals",
+    desc: "Actiio surfaces threads going cold before they slip out of your pipeline for good.",
+    color: "rgba(99,102,241,0.15)",
+    glow: "rgba(99,102,241,0.4)",
+  },
+  {
+    num: "03",
+    emoji: "✍️",
+    title: "Generate a perfect draft",
+    desc: "Get a context-aware follow-up grounded in the real conversation — ready to review in one click.",
+    color: "rgba(236,72,153,0.12)",
+    glow: "rgba(236,72,153,0.4)",
+  },
+  {
+    num: "04",
+    emoji: "👀",
+    title: "Review & approve",
+    desc: "You stay in full control. Tweak the draft if needed, then send when it feels right.",
+    color: "rgba(251,146,60,0.12)",
+    glow: "rgba(251,146,60,0.4)",
+  },
+  {
+    num: "05",
+    emoji: "🔥",
+    title: "Deal stays warm",
+    desc: "The reply goes out in the existing thread so momentum never quietly dies again.",
+    color: "rgba(0,191,99,0.15)",
+    glow: "rgba(0,191,99,0.4)",
   },
 ];
 
-export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolean }) {
-  const { pushToast } = useToast();
-  const [selectedAgent, setSelectedAgent] = useState<typeof AGENTS[0] | null>(null);
+const PROBLEMS = [
+  {
+    title: "Noisy & Overwhelming",
+    desc: "Genuine leads buried under spam while your inbox volume keeps growing.",
+    icon: "📩",
+  },
+  {
+    title: "Missed Opportunities",
+    desc: "Follow-up keeps getting pushed to tomorrow — until the prospect is already gone.",
+    icon: "⏰",
+  },
+  {
+    title: "Quiet Drop-offs",
+    desc: "Conversations don't end with a rejection. They just go silent.",
+    icon: "📉",
+  },
+];
 
+
+/* ─── Hooks ─────────────────────────────────────────────────────────────────── */
+
+function useInView(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setInView(true); obs.disconnect(); } },
+      { threshold }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return { ref, inView };
+}
+
+function useCountUp(target: number, duration = 1800, active = false) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    let start: number | null = null;
+    const step = (ts: number) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      setVal(Math.round(p * p * target));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [active, target, duration]);
+  return val;
+}
+
+/* ─── Sub-components ─────────────────────────────────────────────────────────── */
+
+function StatCard({ val, suffix, label, delay }: { val: number; suffix: string; label: string; delay: number }) {
+  const { ref, inView } = useInView(0.3);
+  const count = useCountUp(val, 1600, inView);
+  return (
+    <div ref={ref} className="lp__stat" style={{ animationDelay: `${delay}ms` }}>
+      <div className="lp__stat-num">
+        <span className="lp__stat-val">{count}</span>
+        <span className="lp__stat-suffix">{suffix}</span>
+      </div>
+      <p className="lp__stat-label">{label}</p>
+    </div>
+  );
+}
+
+/* ─── Component ─────────────────────────────────────────────────────────────── */
+
+export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolean }) {
   const [scrolled, setScrolled] = useState(false);
-  const [showSuggestSkillModal, setShowSuggestSkillModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [skillForm, setSkillForm] = useState({ skill: "", description: "" });
+  const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
+  const heroRef = useRef<HTMLElement>(null);
+  const { ref: psRef, inView: psInView } = useInView();
+  const { ref: hiwRef, inView: hiwInView } = useInView();
+  const { ref: ctaRef, inView: ctaInView } = useInView();
+  const { ref: statsRef, inView: statsInView } = useInView(0.2);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const handleSuggestSkill = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isAuthenticated) {
-      window.location.href = "/sign-up";
-      return;
-    }
-
-    if (!skillForm.skill.trim()) {
-      pushToast("Please provide a skill name.", "error");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("suggested_skills").insert({
-        user_id: user?.id,
-        skill: skillForm.skill,
-        description: skillForm.description,
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const hero = heroRef.current;
+      if (!hero) return;
+      const rect = hero.getBoundingClientRect();
+      if (e.clientY > rect.bottom) return;
+      setMousePos({
+        x: ((e.clientX - rect.left) / rect.width) * 100,
+        y: ((e.clientY - rect.top) / rect.height) * 100,
       });
-
-      if (error) throw error;
-
-      pushToast("Thanks for your suggestion!", "success");
-      setShowSuggestSkillModal(false);
-      setSkillForm({ skill: "", description: "" });
-    } catch (err: any) {
-      console.error("Error suggesting skill:", err);
-      pushToast(err.message || "Something went wrong.", "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
 
   const handleSignOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      const { supabase } = await import("@/lib/supabase");
+      await supabase.auth.signOut();
       window.location.reload();
     } catch (err: any) {
       console.error("Sign out error:", err);
-      pushToast(err.message || "Failed to sign out.", "error");
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#fcfcfc] text-brand-heading selection:bg-brand-primary/20">
-      <nav
-        className={cn(
-          "fixed top-0 z-50 w-full px-4 py-3 transition-all duration-500 sm:px-6 sm:py-4",
-          scrolled ? "bg-white/80 backdrop-blur-xl border-b border-gray-100 shadow-sm" : "bg-transparent"
-        )}
-      >
-        <div className="mx-auto flex max-w-7xl items-center justify-between relative">
-          {/* Left: Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group relative z-10">
-            <div className="relative h-8 w-8 overflow-hidden rounded-xl bg-brand-primary p-1.5 transition-transform group-hover:rotate-12">
-              <Image src="/logo.png" alt="Actiio Logo" width={32} height={32} className="h-full w-full object-contain brightness-0 invert" />
-            </div>
-            <span className="bg-gradient-to-r from-brand-heading to-brand-body bg-clip-text text-xl font-black tracking-tight text-transparent sm:text-2xl">
-              Actiio
-            </span>
+    <main className="lp">
+      {/* ── Canvas noise + orbs ─────────────────────────────────── */}
+      <div className="lp__bg" aria-hidden="true">
+        <div className="lp__noise" />
+        <div className="lp__grid" />
+        <div className="lp__orb lp__orb--1" />
+        <div className="lp__orb lp__orb--2" />
+        <div className="lp__orb lp__orb--3" />
+        <div
+          className="lp__cursor-glow"
+          style={{ left: `${mousePos.x}%`, top: `${mousePos.y}%` }}
+        />
+      </div>
+
+      {/* ── Navbar ────────────────────────────────────────────────────── */}
+      <nav className={`lp__nav${scrolled ? " lp__nav--solid" : ""}`}>
+        <div className="lp__nav-inner">
+          <Link href="/" className="lp__logo">
+            <Image src="/logo.png" alt="Actiio" width={34} height={34} className="lp__logo-img" />
+            <span className="lp__logo-name">Actiio</span>
           </Link>
 
-          {/* Middle: Links - Perfectly Centered */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden items-center gap-10 md:flex">
-            {[
-              { label: "Agents Hub", href: "#agents-hub" },
-              { label: "Pricing", href: "#pricing" },
-              { label: "How it works", href: "#how-it-works" },
-              { label: "About", href: "/about" },
-            ].map((item) => (
-              item.href.startsWith("#") ? (
-                <a
-                  key={item.label}
-                  href={item.href}
-                  className="text-sm font-bold text-brand-body/60 transition-colors hover:text-brand-primary whitespace-nowrap"
-                >
-                  {item.label}
-                </a>
-              ) : (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="text-sm font-bold text-brand-body/60 transition-colors hover:text-brand-primary whitespace-nowrap"
-                >
-                  {item.label}
-                </Link>
-              )
-            ))}
-          </div>
-
-          {/* Right: Auth/Platform */}
-          <div className="relative z-10 flex items-center gap-3 sm:gap-5">
+          <div className="lp__nav-actions">
             {!isAuthenticated ? (
-              <Link href="/sign-in" className="text-xs font-bold text-brand-body/60 transition-colors hover:text-brand-primary sm:text-sm">
-                Sign in
-              </Link>
+              <>
+                <Link href="/sign-in" className="lp__nav-link">Sign In</Link>
+                <Link href="/sign-up" className="lp__btn lp__btn--primary lp__btn--sm">Get Started</Link>
+              </>
             ) : (
-              <button
-                onClick={handleSignOut}
-                className="text-xs font-bold text-brand-body/60 transition-colors hover:text-red-500 sm:text-sm"
-              >
-                Sign out
-              </button>
+              <>
+                <button onClick={handleSignOut} className="lp__nav-link lp__nav-link--muted">Sign Out</button>
+                <Link href="/agents" className="lp__btn lp__btn--primary lp__btn--sm">Go to Platform</Link>
+              </>
             )}
-            <Link href={isAuthenticated ? "/agents" : "/sign-up"}>
-              <Button size="lg" className="h-11 rounded-full px-4 text-sm font-black shadow-xl shadow-brand-primary/20 transition-all hover:scale-105 sm:h-14 sm:px-8 sm:text-base">
-                {isAuthenticated ? "Go to Platform" : "Get Started"}
-              </Button>
-            </Link>
           </div>
         </div>
       </nav>
 
-      <main>
-        <section className="relative overflow-hidden px-4 pb-16 pt-28 text-center sm:px-6 sm:pb-20 sm:pt-36 lg:pb-32 lg:pt-56">
-          <div className="absolute left-1/2 top-0 -translate-x-1/2 overflow-visible opacity-40 blur-[72px] pointer-events-none">
-            <div className="h-[600px] w-[800px] rounded-full bg-gradient-to-tr from-brand-primary/20 to-brand-primary/5" />
+      {/* ── Hero ──────────────────────────────────────────────────────── */}
+      <section className="lp__hero" ref={heroRef}>
+        {/* Floating cards */}
+        <div className="lp__float lp__float--tl lp__anim" style={{ animationDelay: "600ms" }}>
+          <span className="lp__float-icon">⚡</span>
+          <div>
+            <p className="lp__float-val">Auto-drafted</p>
+            <p className="lp__float-sub">follow-up in 4s</p>
           </div>
-
-          <div className="relative z-10 mx-auto max-w-5xl">
-            <div className="mx-auto mb-6 flex w-fit items-center gap-2 rounded-full border border-brand-primary/20 bg-brand-primary/5 px-4 py-2 sm:mb-8 sm:px-5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-primary"></span>
-              </span>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-primary">Introducing the Multi-Agent Platform</span>
-            </div>
-
-            <h1 className="text-[clamp(2.5rem,8vw,5.5rem)] font-black leading-[0.95] tracking-tight text-brand-heading">
-              Scale revenue,<br />
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-brand-primary via-emerald-400 to-brand-primary bg-[length:200%_auto] animate-gradient-x italic">
-                not headcount.
-              </span>
-            </h1>
-
-            <p className="mx-auto max-w-2xl pt-4 text-base font-medium leading-relaxed text-brand-body/70 sm:text-lg lg:text-xl">
-              Actiio monitors your Gmail conversations, detects when leads go quiet, and generates smart follow-up
-              messages automatically.
-            </p>
-
-            <div className="flex flex-col items-stretch justify-center gap-3 pt-8 sm:flex-row sm:items-center sm:gap-6 sm:pt-10">
-              <a href="#agents-hub">
-                <Button size="xl" className="h-14 w-full rounded-full px-8 text-base font-black shadow-2xl shadow-brand-primary/30 transition-all hover:-translate-y-1 sm:h-16 sm:px-12 sm:text-lg">
-                  Browse All Agents
-                </Button>
-              </a>
-              <a href="#how-it-works">
-                <Button variant="ghost" size="xl" className="h-13 w-full rounded-full px-8 text-base font-black text-brand-body hover:text-brand-primary sm:h-16 sm:px-10 sm:text-lg">
-                  See how it works
-                </Button>
-              </a>
-            </div>
-
-            <div className="absolute -left-12 top-40 h-20 w-20 animate-float opacity-20 lg:block hidden">
-              <div className="h-full w-full rounded-3xl bg-white shadow-xl flex items-center justify-center text-3xl">🤖</div>
-            </div>
-            <div className="absolute -right-20 top-60 h-24 w-24 animate-float opacity-20 lg:block hidden delay-1000">
-              <div className="h-full w-full rounded-3xl bg-white shadow-xl flex items-center justify-center text-3xl">📧</div>
-            </div>
-          </div>
-        </section>
-
-        <section id="agents-hub" className="relative mx-4 overflow-hidden bg-[#050505] px-4 py-16 text-white shadow-[0_32px_80px_rgba(0,0,0,0.24)] scroll-mt-24 sm:mx-6 sm:px-6 sm:py-20 lg:rounded-[4rem] lg:py-32">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,191,99,0.1),transparent_70%)] opacity-70" />
-
-          <div className="mx-auto max-w-7xl relative z-20">
-            <div className="mb-10 space-y-4 text-center sm:mb-14 lg:mb-24">
-              <Badge className="bg-brand-primary text-white rounded-full px-4 py-1.5 font-black uppercase text-[10px] tracking-[0.2em] border-none">
-                The Synthetic Squad
-              </Badge>
-              <h2 className="text-4xl font-black leading-none tracking-tighter text-white sm:text-5xl md:text-7xl">
-                Enter the <span className="text-brand-primary">Agents Hub.</span>
-              </h2>
-              <p className="mx-auto max-w-2xl text-base font-semibold leading-relaxed text-white/40 sm:text-lg">
-                One live follow-up agent today, with more specialized agents coming next.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {AGENTS.map((agent) => (
-                <div
-                  key={agent.id}
-                  className={cn(
-                    "group relative flex h-full flex-col rounded-[1.75rem] p-1 transition-all duration-500 sm:rounded-[2.1rem] lg:rounded-[2.5rem]",
-                    agent.status === "active" ? "bg-gradient-to-br from-brand-primary/20 via-white/5 to-white/5 hover:scale-[1.02]" : "bg-gradient-to-br from-white/10 to-white/5 hover:scale-[1.02]"
-                  )}
-                  onClick={() => agent.status === "active" && setSelectedAgent(agent)}
-                >
-                  <div className="relative flex flex-1 flex-col justify-between overflow-hidden rounded-[1.5rem] border border-white/5 bg-brand-dark/70 p-5 sm:rounded-[2rem] sm:p-7 lg:rounded-[2.35rem] lg:p-10">
-                    {agent.status === "active" && (
-                      <div className="absolute -right-20 -bottom-20 h-60 w-60 rounded-full bg-brand-primary/15 blur-[44px] group-hover:bg-brand-primary/20 transition-colors" />
-                    )}
-
-                    <div className={cn(agent.status === "active" && "transition-opacity duration-200 group-hover:opacity-15")}>
-                      <div className="mb-8 flex items-start justify-between sm:mb-10">
-                        <div
-                          className={cn(
-                            "flex h-14 w-14 items-center justify-center rounded-2xl text-3xl shadow-2xl transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 sm:h-16 sm:w-16 sm:text-4xl",
-                            agent.status === "active" ? "bg-brand-primary text-white" : "bg-white/5 text-white/20"
-                          )}
-                        >
-                          {agent.icon}
-                        </div>
-                        {agent.status === "active" ? (
-                          <div className="flex flex-col items-end">
-                            <Badge className="bg-green-500 text-white rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest border-none">
-                              Live Now
-                            </Badge>
-                            <span className="text-[10px] font-black text-brand-primary mt-2">v.1.0 Operational</span>
-                          </div>
-                        ) : (
-                          <Badge className="bg-brand-primary/20 text-brand-primary rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest border border-brand-primary/30">
-                            Coming Soon
-                          </Badge>
-                        )}
-                      </div>
-
-                      <h3 className="mb-3 text-2xl font-black tracking-tight text-white transition-colors group-hover:text-brand-primary sm:mb-4 sm:text-3xl">{agent.name}</h3>
-                      <p className="mb-6 text-sm font-semibold leading-relaxed text-white/60 sm:mb-8">{agent.desc}</p>
-                    </div>
-
-                    <div className={cn(
-                      "flex items-center justify-between border-t border-white/5 pt-6 sm:pt-8",
-                      agent.status === "active" && "transition-opacity duration-200 group-hover:opacity-15"
-                    )}>
-                      <div className="flex -space-x-2">
-                        {[1, 2, 3].map((j) => <div key={j} className="h-6 w-6 rounded-full border-2 border-brand-dark bg-white/10" />)}
-                      </div>
-                      {agent.status !== "active" ? (
-                        <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Connect in seconds</span>
-                      ) : (
-                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white/55">
-                          Get started
-                        </span>
-                      )}
-                    </div>
-
-                    {agent.status === "active" && (
-                      <Link
-                        href={isAuthenticated ? "/agents" : "/sign-up"}
-                        onClick={(event) => event.stopPropagation()}
-                        className="absolute inset-0 z-20 flex items-center justify-center rounded-[2.35rem] opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                      >
-                        <div className="absolute inset-0 rounded-[2.35rem] bg-[#04120c]/52 backdrop-blur-md" />
-                        <div className="absolute inset-0 rounded-[2.35rem] border border-emerald-200/18 bg-gradient-to-br from-[#00bf63]/28 via-[#00bf63]/12 to-[#7ef0b8]/8" />
-                        <div className="absolute -left-2 top-0 h-40 w-40 rounded-full bg-[#00bf63]/32 blur-3xl opacity-95" />
-                        <div className="absolute right-4 top-8 h-24 w-24 rounded-full bg-[#7ef0b8]/24 blur-3xl opacity-90" />
-                        <div className="absolute bottom-2 right-2 h-32 w-32 rounded-full bg-[#00e07a]/20 blur-3xl opacity-85" />
-                        <Button size="lg" className="relative rounded-full font-black px-8 bg-white text-brand-dark hover:bg-brand-primary hover:text-white shadow-[0_0_20px_rgba(255,255,255,0.12)] transition-colors">
-                          {agent.id === "gmail_followup" ? "Get started →" : "View details"}
-                        </Button>
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              <div className="group relative flex h-full flex-col rounded-[1.75rem] bg-gradient-to-br from-white/5 to-transparent p-1 transition-all duration-700 hover:from-white/10 sm:rounded-[2.1rem] lg:rounded-[2.5rem]">
-                <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden rounded-[1.5rem] border border-white/5 bg-[#0a0a0a]/78 p-6 text-center sm:rounded-[2rem] sm:p-8 lg:rounded-[2.35rem] lg:p-10">
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border border-white/[0.03] rounded-full animate-pulse-glow" style={{ animationDuration: "5.5s" }} />
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-white/[0.05] rounded-full animate-float" style={{ animationDuration: "6s" }} />
-
-                  <div className="relative z-10 flex flex-col items-center gap-6">
-                    <div className="h-20 w-20 rounded-full bg-white/5 flex items-center justify-center text-4xl text-white/20 border border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-700">
-                      ✨
-                    </div>
-                    <div className="space-y-2">
-                      <Badge className="bg-white/5 text-white/40 rounded-full px-4 py-1.5 font-black uppercase text-[10px] tracking-[0.2em] border border-white/10">
-                        In Development
-                      </Badge>
-                      <h3 className="text-2xl font-black text-white/60">The Intelligence Lab</h3>
-                      <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-2">
-                        Expanding the squad&apos;s reach across every sales channel
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      className="text-white/40 hover:text-white hover:bg-white/5 rounded-full font-black text-xs px-6"
-                      onClick={() => {
-                        if (!isAuthenticated) {
-                          window.location.href = "/sign-up";
-                        } else {
-                          setShowSuggestSkillModal(true);
-                        }
-                      }}
-                    >
-                      Suggest a Skill →
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-10 flex justify-center sm:mt-14 lg:mt-20">
-              <div className="rounded-full border border-white/5 bg-white/[0.02] px-5 py-3 sm:px-8">
-                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/30 text-center">
-                  More specialized agents <span className="text-brand-primary">coming soon...</span>
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="pricing" className="mt-6 px-4 pb-16 sm:mt-8 sm:px-6 sm:pb-20 lg:mt-12 lg:pb-28">
-          <div className="mx-auto max-w-7xl">
-            <div className="mb-8 text-center sm:mb-12">
-              <Badge className="bg-brand-primary/10 text-brand-primary rounded-full px-4 py-1.5 font-black uppercase text-[10px] tracking-[0.2em] border-none">
-                Pricing
-              </Badge>
-              <h2 className="mt-4 text-3xl font-black tracking-tight text-brand-heading sm:text-4xl md:text-5xl">
-                Choose your follow-up coverage.
-              </h2>
-              <p className="mx-auto mt-4 max-w-2xl text-base font-medium text-brand-body/60 sm:text-lg">
-                Start with the Gmail Follow-up Agent today. More sales agents will be available as separate subscriptions.
-              </p>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-1">
-              {AGENTS.filter((agent) => agent.status === "active").map((agent) => (
-                <Card key={agent.id} className="rounded-[1.75rem] border-gray-100 p-5 shadow-xl shadow-gray-200/40 sm:rounded-[2.2rem] sm:p-8 lg:rounded-[2.5rem]">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-3xl">{agent.icon}</p>
-                      <h3 className="mt-3 text-2xl font-black tracking-tight text-brand-heading sm:mt-4 sm:text-3xl">{agent.name}</h3>
-                      <p className="mt-3 max-w-md text-sm font-medium leading-relaxed text-brand-body/65">
-                        {agent.desc}
-                      </p>
-                    </div>
-                    <Badge className="rounded-full bg-brand-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-brand-primary">
-                      Available now
-                    </Badge>
-                  </div>
-
-                  <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                    {agent.features.slice(0, 3).map((feature) => (
-                      <div key={feature} className="rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-3">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-brand-body/35">Included</p>
-                        <p className="mt-1 text-sm font-bold leading-snug text-brand-heading">{feature}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 flex flex-col gap-5 border-t border-gray-100 pt-5 sm:mt-8 sm:flex-row sm:items-end sm:justify-between sm:pt-6">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-body/40">Price</p>
-                      <p className="mt-2 text-3xl font-black text-brand-heading sm:text-4xl">₹499<span className="text-base text-brand-body/50 sm:text-lg">/month</span></p>
-                    </div>
-                    <Link href={isAuthenticated ? "/agents" : "/sign-up"}>
-                      <Button className="w-full rounded-full px-8 font-black shadow-xl shadow-brand-primary/20 sm:w-auto">
-                        Get started →
-                      </Button>
-                    </Link>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="how-it-works" className="relative bg-white px-4 py-16 sm:px-6 sm:py-20 lg:py-32">
-          <div className="mx-auto max-w-7xl">
-            <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-20">
-              <div className="space-y-6 sm:space-y-8">
-                <Badge className="bg-brand-primary/10 text-brand-primary rounded-full px-4 py-1.5 font-black uppercase text-[10px] tracking-[0.2em] border-none">
-                  The Workflow
-                </Badge>
-                <h2 className="text-3xl font-black leading-[1.05] tracking-[calc(-0.02em)] text-brand-heading sm:text-4xl md:text-5xl lg:text-6xl">
-                  Intelligent monitoring <br />
-                  across your <span className="text-brand-primary">core channels.</span>
-                </h2>
-                <div className="space-y-6 pt-2 sm:space-y-8 sm:pt-4 lg:space-y-12 lg:pt-8">
-                  {[
-                    { title: "Dedicated Gmail Agent", desc: "Connect the Gmail Follow-up Agent to monitor sales inbox activity and surface quiet leads automatically.", icon: "🔌" },
-                    { title: "Quiet Lead Detection", desc: "The agent tracks conversation history, detects silence, and prepares contextual follow-up drafts from the actual thread.", icon: "🧠" },
-                    { title: "Review And Send", desc: "Review the draft, make edits if needed, and reply through Gmail directly from the dashboard.", icon: "✨" }
-                  ].map((item, i) => (
-                    <div key={i} className="group flex items-start gap-4 sm:gap-6">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 text-lg transition-all duration-300 group-hover:border-brand-primary/30 group-hover:bg-brand-primary/10 sm:h-12 sm:w-12 sm:text-xl">
-                        {item.icon}
-                      </div>
-                      <div>
-                        <h4 className="mb-2 text-lg font-black text-brand-heading transition-colors group-hover:text-brand-primary sm:text-xl">{item.title}</h4>
-                        <p className="text-brand-body/60 leading-relaxed font-semibold">{item.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="group relative aspect-square overflow-hidden rounded-[2.2rem] border border-gray-100 bg-gray-50/50 p-1 shadow-xl sm:rounded-[3rem] lg:rounded-[3.5rem]">
-                <div className="absolute inset-0 bg-brand-primary/5 blur-3xl group-hover:bg-brand-primary/10 transition-colors" />
-                <div className="relative flex h-full w-full items-center justify-center rounded-[2rem] bg-white p-5 sm:rounded-[2.8rem] sm:p-6 lg:rounded-[3.3rem] lg:p-8">
-                  <div className="w-full space-y-6">
-                    <div className="animate-float rounded-2xl border border-gray-100 bg-gray-50 p-4 shadow-sm sm:p-6">
-                      <div className="flex justify-between items-center mb-4">
-                        <div className="h-4 w-32 bg-gray-200 rounded-full" />
-                        <Badge className="bg-brand-primary text-[8px] px-3 font-black text-white">READY</Badge>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="h-2 w-full bg-gray-100 rounded-full" />
-                        <div className="h-2 w-2/3 bg-gray-100 rounded-full" />
-                      </div>
-                    </div>
-                    <div className="relative z-10 translate-x-4 animate-float rounded-2xl border border-brand-primary/20 bg-white p-4 shadow-xl delay-700 sm:translate-x-8 sm:p-6 lg:translate-x-10">
-                      <div className="flex justify-between items-center mb-4">
-                        <div className="h-4 w-24 bg-brand-primary/10 rounded-full" />
-                        <Badge className="bg-blue-500 text-[8px] px-3 font-black text-white">DRAFTING</Badge>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="h-2 w-full bg-blue-50 rounded-full" />
-                        <div className="h-2 w-1/2 bg-blue-50 rounded-full" />
-                      </div>
-                      <div className="mt-4 pt-4 border-t border-gray-50 flex justify-end">
-                        {/* <div className="h-8 w-24 bg-brand-primary rounded-lg" /> */}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <Dialog open={!!selectedAgent} onClose={() => setSelectedAgent(null)} contentClassName="max-w-4xl overflow-hidden rounded-[2rem] p-0 sm:rounded-[3rem]">
-        {selectedAgent && (
-          <div className="flex min-h-[500px] flex-col md:flex-row">
-            <div className={cn("relative flex flex-col items-center justify-center p-8 text-white md:w-72 md:p-12", selectedAgent.status === "active" ? "bg-brand-dark" : "bg-brand-primary")}>
-              <div className="mb-6 animate-float text-7xl drop-shadow-2xl sm:mb-8 sm:text-9xl">
-                {selectedAgent.icon}
-              </div>
-              <div className="text-center">
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">{selectedAgent.tagline}</span>
-                <h4 className="text-xl font-black mt-1 leading-none">{selectedAgent.name}</h4>
-              </div>
-            </div>
-
-            <div className="relative flex-1 bg-white p-6 sm:p-8 md:p-12">
-              <button
-                onClick={() => setSelectedAgent(null)}
-                className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 transition-colors hover:bg-gray-100 sm:right-8 sm:top-8"
-              >
-                <svg className="h-5 w-5 text-brand-body/40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-
-              <div className="max-w-md">
-                <Badge className={cn("mb-6 px-4 py-1 font-black uppercase border-none text-[10px] tracking-widest", selectedAgent.status === "active" ? "bg-brand-primary/10 text-brand-primary" : "bg-amber-100 text-amber-600")}>
-                  {selectedAgent.status === "active" ? "Operational Status: 100%" : "Current Phase: Beta Lab"}
-                </Badge>
-                <h3 className="mb-5 text-3xl font-black tracking-tight text-brand-heading sm:mb-6 sm:text-4xl">{selectedAgent.name}</h3>
-                <p className="mb-8 text-base font-medium leading-relaxed text-brand-body/70 sm:mb-10 sm:text-lg">
-                  {selectedAgent.longDesc}
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-12">
-                  {selectedAgent.features.map((f) => (
-                    <div key={f} className="flex items-center gap-3 text-sm font-bold text-brand-heading/80">
-                      <div className="h-2 w-2 rounded-full bg-brand-primary" />
-                      {f}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Link href={selectedAgent.status === "active" ? (isAuthenticated ? "/agents" : "/sign-up") : "#agents-hub"} className="flex-1">
-                    <Button
-                      className="w-full h-14 rounded-2xl font-black shadow-xl shadow-brand-primary/20"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedAgent(null);
-                      }}
-                    >
-                      {selectedAgent.status === "active" ? (isAuthenticated ? "View Agent" : "Get started →") : "View Details"}
-                    </Button>
-                  </Link>
-                  {selectedAgent.status === "active" && (
-                    <div className="flex flex-col justify-center px-4">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-brand-body/40">Usage Fee</span>
-                      <span className="text-lg font-black text-brand-heading">{selectedAgent.price}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </Dialog>
-
-      <Dialog open={showSuggestSkillModal} onClose={() => setShowSuggestSkillModal(false)} contentClassName="max-w-md rounded-[2rem] border-white/10 bg-[#0a0a0a] p-6 sm:rounded-[2.5rem] sm:p-10">
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <Badge className="bg-brand-primary/20 text-brand-primary rounded-full px-4 py-1.5 font-black uppercase text-[10px] tracking-[0.2em] border border-brand-primary/30 w-fit">
-              Co-creation Lab
-            </Badge>
-            <h3 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Suggest a Skill</h3>
-            <p className="text-white/60 font-semibold text-sm leading-relaxed">
-              Tell us what other sales automated agents you&apos;d like to see.
-            </p>
-          </div>
-
-          <form onSubmit={handleSuggestSkill} className="space-y-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-white/40 pl-1">What skill should we build?</label>
-                <Input
-                  placeholder="e.g. Sales Voice AI, LinkedIn Outreach..."
-                  value={skillForm.skill}
-                  onChange={(e) => setSkillForm({ ...skillForm, skill: e.target.value })}
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/20 h-14 rounded-2xl focus:border-brand-primary transition-all pr-4 pl-4"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-white/40 pl-1">How would you use it?</label>
-                <Textarea
-                  placeholder="Describe the workflow we should automate..."
-                  value={skillForm.description}
-                  onChange={(e) => setSkillForm({ ...skillForm, description: e.target.value })}
-                  className="bg-white/5 border-white/10 text-white placeholder:text-white/20 min-h-[120px] rounded-2xl focus:border-brand-primary transition-all p-4"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:gap-4">
-              <Button type="button" variant="ghost" onClick={() => setShowSuggestSkillModal(false)} className="flex-1 h-14 rounded-2xl font-black text-white/50 hover:text-white hover:bg-white/5">
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting} className="flex-1 h-14 rounded-2xl font-black bg-brand-primary hover:bg-emerald-500 shadow-xl shadow-brand-primary/20 hover:scale-[1.02] transition-all">
-                {isSubmitting ? "Submitting..." : "Submit Suggestion"}
-              </Button>
-            </div>
-
-            {!isAuthenticated && (
-              <p className="text-center text-[10px] font-bold text-white/30 italic">
-                * Note: You will be redirected to sign up to submit.
-              </p>
-            )}
-          </form>
         </div>
-      </Dialog>
+        <div className="lp__float lp__float--tr lp__anim" style={{ animationDelay: "750ms" }}>
+          <span className="lp__float-icon">🎯</span>
+          <div>
+            <p className="lp__float-val">Deal recovered</p>
+            <p className="lp__float-sub lp__float-sub--g">+$12,400</p>
+          </div>
+        </div>
+        <div className="lp__float lp__float--bl lp__anim" style={{ animationDelay: "900ms" }}>
+          <span className="lp__float-icon">📊</span>
+          <div>
+            <p className="lp__float-val">Pipeline health</p>
+            <p className="lp__float-sub lp__float-sub--g">↑ 38%</p>
+          </div>
+        </div>
 
-      <footer className="border-t border-gray-100 bg-white px-4 py-12 pb-8 sm:px-6 sm:py-16 sm:pb-10 lg:py-20">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-10 flex flex-col items-start justify-between gap-10 sm:mb-14 md:flex-row lg:mb-20">
-            <div className="space-y-6">
-              <Link href="/" className="flex items-center gap-2.5">
-                <div className="relative h-6 w-6 overflow-hidden rounded-lg bg-brand-primary p-1">
-                  <Image src="/logo.png" alt="Actiio Logo" width={24} height={24} className="h-full w-full object-contain brightness-0 invert" />
+        <div className="lp__hero-inner">
+          <div className="lp__badge lp__anim" style={{ animationDelay: "0ms" }}>
+            <span className="lp__badge-dot" />
+            Introducing the Gmail Follow-up Agent
+          </div>
+
+          <h1 className="lp__headline lp__anim" style={{ animationDelay: "80ms" }}>
+            <span className="lp__headline-line">Deals don't die with a no.</span>
+            <span className="lp__headline-line">They fade with</span>
+            <span className="lp__headline-word">Silence.</span>
+          </h1>
+
+          <p className="lp__sub lp__anim" style={{ animationDelay: "160ms" }}>
+            Actiio is an AI platform built for sales workflows. Our specialized agent
+            ensures your warm leads never go cold — starting straight from your inbox.
+          </p>
+
+          <div className="lp__ctas lp__anim" style={{ animationDelay: "240ms" }}>
+            <Link href={isAuthenticated ? "/agents" : "/sign-up"} className="lp__btn lp__btn--hero lp__btn--glow">
+              {isAuthenticated ? "Enter the App" : "Start Automating Follow-ups"}
+              <svg className="lp__btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </Link>
+            <a href="#how-it-works" className="lp__btn lp__btn--ghost lp__btn--hero">
+              See how it works
+              <svg className="lp__btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </a>
+          </div>
+
+          {/* Trust badges */}
+          <div className="lp__trust lp__anim" style={{ animationDelay: "380ms" }}>
+            <span className="lp__trust-item">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="lp__trust-icon">
+                <path d="M7 1l1.6 3.3 3.6.5-2.6 2.5.6 3.6L7 9.3 3.8 11l.6-3.6L2 4.8l3.6-.5z" />
+              </svg>
+              No credit card required
+            </span>
+            <span className="lp__trust-dot" />
+            <span className="lp__trust-item">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="lp__trust-icon">
+                <rect x="2" y="6" width="10" height="7" rx="1.5" /><path d="M4.5 6V4a2.5 2.5 0 015 0v2" />
+              </svg>
+              SOC 2 ready infrastructure
+            </span>
+            <span className="lp__trust-dot" />
+            <span className="lp__trust-item">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="lp__trust-icon">
+                <path d="M7 1.5v11M1.5 7h11" />
+              </svg>
+              Setup in 60 seconds
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Video ─────────────────────────────────────────────────────── */}
+      <section className="lp__video-wrap lp__anim" style={{ animationDelay: "500ms" }}>
+        <div className="lp__video-header">
+          <p className="lp__eyebrow" style={{ textAlign: "center" }}>See it in action</p>
+          <h2 className="lp__section-title" style={{ textAlign: "center", marginBottom: "0" }}>
+            From inbox to deal, in{" "}
+            <span className="lp__green">minutes.</span>
+          </h2>
+          <p className="lp__section-sub" style={{ textAlign: "center" }}>
+            Watch how Actiio detects a cold thread, drafts the perfect follow-up, and puts you back in the conversation.
+          </p>
+        </div>
+        <div className="lp__video-shell">
+          <div className="lp__video-shine" />
+          <div className="lp__video-topbar">
+            <span className="lp__video-dot lp__video-dot--r" />
+            <span className="lp__video-dot lp__video-dot--y" />
+            <span className="lp__video-dot lp__video-dot--g" />
+            <span className="lp__video-title">Actiio — Gmail Follow-up Agent</span>
+          </div>
+          <div className="lp__video-inner">
+            <video className="lp__video" autoPlay muted loop playsInline controls preload="metadata">
+              <source src="/main%20product%20video.mp4" type="video/mp4" />
+            </video>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ── Problem / Solution ─────────────────────────────────────────── */}
+      <section className="lp__ps" ref={psRef}>
+        <div className="lp__container lp__ps-inner">
+          <div className={`lp__ps-left lp__reveal${psInView ? " lp__reveal--in" : ""}`}>
+            <p className="lp__eyebrow">The Problem</p>
+            <h2 className="lp__section-title">
+              The biggest leak in your<br />
+              pipeline is the <span className="lp__green">inbox.</span>
+            </h2>
+            <div className="lp__problems">
+              {PROBLEMS.map((p, i) => (
+                <div key={i} className="lp__problem" style={{ transitionDelay: `${i * 80}ms` }}>
+                  <span className="lp__problem-icon">{p.icon}</span>
+                  <div>
+                    <p className="lp__problem-title">{p.title}</p>
+                    <p className="lp__problem-desc">{p.desc}</p>
+                  </div>
                 </div>
-                <span className="text-xl font-black tracking-tight text-brand-heading">Actiio</span>
-              </Link>
-              <p className="max-w-xs text-brand-body/60 font-medium">The intelligent multi-agent platform for modern revenue teams. Scale intelligence, not headcount.</p>
+              ))}
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 sm:gap-16">
-              <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-brand-heading">Platform</h4>
-                <ul className="space-y-2 text-sm font-bold text-brand-body/60">
-                  <li><a href="#pricing" className="hover:text-brand-primary transition-colors">Pricing</a></li>
-                </ul>
-              </div>
-              <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-brand-heading">Company</h4>
-                <ul className="space-y-2 text-sm font-bold text-brand-body/60">
-                  <li><Link href="/about" className="hover:text-brand-primary transition-colors">About Actiio</Link></li>
-                  <li><Link href="/contact" className="hover:text-brand-primary transition-colors">Contact Support</Link></li>
+          <div className={`lp__ps-right lp__reveal${psInView ? " lp__reveal--in" : ""}`} style={{ transitionDelay: "180ms" }}>
+            <div className="lp__sol-card">
+              <div className="lp__sol-glow" />
+              <div className="lp__sol-shimmer" />
+              <div className="lp__sol-body">
+                <span className="lp__tag">The Solution</span>
+                <h3 className="lp__sol-title">A Gmail Follow-up Agent.</h3>
+                <ul className="lp__features">
+                  {[
+                    { text: "Syncs securely with your Gmail inbox", icon: "🔒" },
+                    { text: "Automatically classifies warm leads", icon: "🤖" },
+                    { text: "Detects conversation silence", icon: "🔔" },
+                    { text: "Generates contextual drafts for your approval", icon: "✨" },
+                  ].map((f, i) => (
+                    <li key={i} className="lp__feature">
+                      <span className="lp__feature-icon">{f.icon}</span>
+                      {f.text}
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div className="pt-8 border-t border-gray-50 flex flex-col sm:flex-row justify-between items-center gap-6">
-            <p className="text-xs font-bold text-brand-body/40">© {new Date().getFullYear()} Actiio AI. Made for the builders.</p>
-            <div className="flex gap-8 text-[10px] font-black uppercase tracking-widest text-brand-body/40">
-              <Link href="/privacy" className="hover:text-brand-heading transition-colors">Privacy</Link>
-              <Link href="/terms" className="hover:text-brand-heading transition-colors">Terms</Link>
-              <Link href="/refund-policy" className="hover:text-brand-heading transition-colors">Refund Policy</Link>
+      {/* ── How it works ──────────────────────────────────────────────── */}
+      <section id="how-it-works" className="lp__hiw" ref={hiwRef}>
+        <div className="lp__container">
+          <div className={`lp__section-header lp__reveal${hiwInView ? " lp__reveal--in" : ""}`}>
+            <p className="lp__eyebrow">How it works</p>
+            <h2 className="lp__section-title">
+              From cold threads to{" "}
+              <span className="lp__green">closed deals.</span>
+            </h2>
+            <p className="lp__section-sub">
+              Five steps. Zero admin. Your pipeline stays alive on autopilot.
+            </p>
+          </div>
+
+          <div className="lp__steps">
+            {STEPS.map((s, i) => (
+              <div
+                key={i}
+                className={`lp__step lp__reveal${hiwInView ? " lp__reveal--in" : ""}`}
+                style={{ transitionDelay: `${i * 90}ms`, "--step-color": s.color, "--step-glow": s.glow } as React.CSSProperties}
+              >
+                <div className="lp__step-top">
+                  <div className="lp__step-icon">
+                    <span className="lp__step-emoji">{s.emoji}</span>
+                  </div>
+                  <span className="lp__step-num">{s.num}</span>
+                </div>
+                <h3 className="lp__step-title">{s.title}</h3>
+                <p className="lp__step-desc">{s.desc}</p>
+                <div className="lp__step-bar" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Bottom CTA ────────────────────────────────────────────────── */}
+      <section className="lp__cta-wrap" ref={ctaRef}>
+        <div className="lp__container">
+          <div className={`lp__cta-card lp__reveal${ctaInView ? " lp__reveal--in" : ""}`}>
+            <div className="lp__cta-glow" />
+            <div className="lp__cta-grid-overlay" />
+            <div className="lp__cta-body">
+              <span className="lp__badge" style={{ marginBottom: "1.5rem" }}>
+                <span className="lp__badge-dot" />
+                Limited Early Access
+              </span>
+              <h2 className="lp__cta-title">
+                Ready to stop losing<br />warm leads?
+              </h2>
+              <p className="lp__cta-sub">
+                Join the teams that use Actiio to maintain deal momentum
+                with zero extra admin effort.
+              </p>
+              <Link href={isAuthenticated ? "/agents" : "/sign-up"} className="lp__btn lp__btn--hero lp__btn--glow">
+                {isAuthenticated ? "Enter the App" : "Get Started Now"}
+                <svg className="lp__btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </Link>
+              <p className="lp__cta-fine">No credit card · Cancel anytime</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Footer ────────────────────────────────────────────────────── */}
+      <footer className="lp__footer">
+        <div className="lp__container lp__footer-inner">
+          <div className="lp__footer-brand">
+            <Image src="/logo.png" alt="Actiio" width={26} height={26} className="lp__footer-logo" />
+            <span className="lp__footer-name">Actiio</span>
+          </div>
+          <p className="lp__footer-contact">Have questions or need a custom setup?</p>
+          <a href="mailto:business@actiio.co" className="lp__footer-email">business@actiio.co</a>
+          <div className="lp__footer-bottom">
+            <span>© {new Date().getFullYear()} Actiio AI. All rights reserved.</span>
+            <div className="lp__footer-links">
+              <Link href="/privacy" className="lp__footer-link">Privacy Policy</Link>
+              <Link href="/terms" className="lp__footer-link">Terms of Service</Link>
             </div>
           </div>
         </div>
       </footer>
 
-      <style jsx global>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-20px) rotate(2deg); }
+      {/* ── Styles ────────────────────────────────────────────────────── */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+        /* ─ Root / tokens ──────────────────────────────── */
+        .lp {
+          --g: #00bf63;
+          --g-bright: #00e87a;
+          --g-dim: rgba(0,191,99,0.10);
+          --g-dim2: rgba(0,191,99,0.06);
+          --g-border: rgba(0,191,99,0.22);
+          --g-glow: rgba(0,191,99,0.30);
+          --violet: rgba(99,102,241,0.70);
+          --violet-dim: rgba(99,102,241,0.08);
+          --pink: rgba(236,72,153,0.70);
+          --ink: #ffffff;
+          --ink-80: rgba(255,255,255,0.80);
+          --ink-70: rgba(255,255,255,0.70);
+          --ink-50: rgba(255,255,255,0.50);
+          --ink-45: rgba(255,255,255,0.45);
+          --ink-20: rgba(255,255,255,0.20);
+          --ink-10: rgba(255,255,255,0.10);
+          --ink-08: rgba(255,255,255,0.08);
+          --ink-05: rgba(255,255,255,0.05);
+          --ink-04: rgba(255,255,255,0.04);
+          --bg: #06070a;
+          --card: rgba(255,255,255,0.035);
+          --pill: 9999px;
+          --r-lg: 1.25rem;
+          --r-xl: 1.75rem;
+          --r-2xl: 2.25rem;
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+          background: var(--bg);
+          color: var(--ink);
+          overflow-x: hidden;
+          min-height: 100vh;
+          -webkit-font-smoothing: antialiased;
         }
-        @keyframes pulse-glow {
-          0%, 100% { opacity: 0.4; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.05); }
+
+        /* ─ Background ─────────────────────────────────── */
+        .lp__bg {
+          position: fixed; inset: 0; z-index: 0; pointer-events: none;
+          overflow: hidden;
         }
-        @keyframes gradient-x {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
+
+        /* Grain noise overlay */
+        .lp__noise {
+          position: absolute; inset: -50%;
+          width: 200%; height: 200%;
+          opacity: 0.028;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+          background-size: 256px 256px;
+          animation: noiseShift 0.5s steps(2) infinite;
         }
-        .animate-float { animation: float 6s ease-in-out infinite; }
-        .animate-pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
-        .animate-gradient-x { animation: gradient-x 3s linear infinite; }
+        @keyframes noiseShift {
+          0%   { transform: translate(0, 0); }
+          25%  { transform: translate(-2%, 1%); }
+          50%  { transform: translate(1%, -2%); }
+          75%  { transform: translate(-1%, 1.5%); }
+          100% { transform: translate(0.5%, -0.5%); }
+        }
+
+        .lp__grid {
+          position: absolute; inset: 0;
+          background-image:
+            linear-gradient(to right,  rgba(255,255,255,0.028) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255,255,255,0.028) 1px, transparent 1px);
+          background-size: 48px 48px;
+          mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 50%, transparent 100%);
+        }
+
+        .lp__orb {
+          position: absolute; border-radius: 9999px; filter: blur(120px);
+          animation: orbPulse 12s ease-in-out infinite;
+        }
+        .lp__orb--1 {
+          top: -18%; left: -12%; width: 55%; height: 55%; opacity: 0.60;
+          background: radial-gradient(circle, rgba(0,191,99,0.20) 0%, transparent 65%);
+        }
+        .lp__orb--2 {
+          top: 25%; right: -15%; width: 42%; height: 62%; opacity: 0.40;
+          background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 65%);
+          animation-delay: 5s;
+        }
+        .lp__orb--3 {
+          bottom: -10%; left: 30%; width: 38%; height: 38%; opacity: 0.30;
+          background: radial-gradient(circle, rgba(236,72,153,0.14) 0%, transparent 65%);
+          animation-delay: 8s; animation-duration: 15s;
+        }
+        @keyframes orbPulse {
+          0%,100% { opacity: 0.40; transform: scale(1) translate(0,0); }
+          33%      { opacity: 0.65; transform: scale(1.07) translate(1%,-1%); }
+          66%      { opacity: 0.50; transform: scale(0.96) translate(-1%,1%); }
+        }
+
+        /* Interactive cursor glow */
+        .lp__cursor-glow {
+          position: absolute;
+          width: 700px; height: 700px;
+          border-radius: 9999px;
+          background: radial-gradient(circle, rgba(0,191,99,0.06) 0%, transparent 65%);
+          transform: translate(-50%, -50%);
+          pointer-events: none;
+          transition: left 0.6s ease, top 0.6s ease;
+          filter: blur(30px);
+        }
+
+        /* ─ Layout ─────────────────────────────────────── */
+        .lp__container { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem; }
+
+        /* ─ Animations ─────────────────────────────────── */
+        .lp__anim {
+          opacity: 0; transform: translateY(24px);
+          animation: fadeUp 0.78s cubic-bezier(0.16,1,0.3,1) forwards;
+        }
+        @keyframes fadeUp {
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Scroll-triggered reveal */
+        .lp__reveal {
+          opacity: 0; transform: translateY(32px);
+          transition: opacity 0.75s cubic-bezier(0.16,1,0.3,1), transform 0.75s cubic-bezier(0.16,1,0.3,1);
+        }
+        .lp__reveal--in { opacity: 1; transform: translateY(0); }
+
+        /* ─ Navbar ─────────────────────────────────────── */
+        .lp__nav {
+          position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+          padding: 1rem 1.5rem;
+          border-bottom: 1px solid transparent;
+          transition: background 0.35s, border-color 0.35s, backdrop-filter 0.35s;
+        }
+        .lp__nav--solid {
+          background: rgba(6,7,10,0.82);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border-color: var(--ink-08);
+        }
+        .lp__nav-inner {
+          max-width: 72rem; margin: 0 auto;
+          display: flex; align-items: center; justify-content: space-between;
+        }
+        .lp__logo { display: flex; align-items: center; gap: 0.625rem; text-decoration: none; }
+        .lp__logo-img { width: 2rem; height: 2rem; object-fit: contain; }
+        .lp__logo-name {
+          font-size: 1.25rem; font-weight: 900; letter-spacing: -0.03em; color: var(--ink);
+        }
+        .lp__nav-actions { display: flex; align-items: center; gap: 1rem; }
+        .lp__nav-link {
+          font-size: 0.875rem; font-weight: 500; color: var(--ink-50);
+          text-decoration: none; background: none; border: none; cursor: pointer;
+          transition: color 0.2s;
+        }
+        .lp__nav-link:hover { color: var(--ink); }
+        .lp__nav-link--muted:hover { color: #f87171; }
+
+        /* ─ Buttons ─────────────────────────────────────── */
+        .lp__btn {
+          display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+          font-weight: 700; border-radius: var(--pill); text-decoration: none;
+          border: none; cursor: pointer; transition: all 0.22s; white-space: nowrap;
+          font-family: inherit;
+        }
+        .lp__btn--sm  { height: 2.375rem; padding: 0 1.125rem; font-size: 0.8125rem; }
+        .lp__btn--hero{ height: 3.375rem; padding: 0 2rem; font-size: 0.9375rem; }
+        .lp__btn--primary { background: var(--g); color: #000; }
+        .lp__btn--primary:hover { background: var(--g-bright); transform: scale(1.03); }
+        .lp__btn--primary:active { transform: scale(0.97); }
+        .lp__btn--glow {
+          background: linear-gradient(135deg, var(--g) 0%, var(--g-bright) 100%);
+          color: #000;
+          box-shadow: 0 0 0 0 var(--g-glow), 0 4px 24px rgba(0,191,99,0.20);
+          transition: all 0.25s;
+          position: relative; overflow: hidden;
+        }
+        .lp__btn--glow::after {
+          content: '';
+          position: absolute; inset: 0;
+          background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.15) 100%);
+          opacity: 0; transition: opacity 0.25s;
+        }
+        .lp__btn--glow:hover {
+          transform: scale(1.04) translateY(-1px);
+          box-shadow: 0 0 40px 8px var(--g-glow), 0 8px 32px rgba(0,191,99,0.30);
+        }
+        .lp__btn--glow:hover::after { opacity: 1; }
+        .lp__btn--glow:active { transform: scale(0.98); }
+        .lp__btn--ghost {
+          background: rgba(255,255,255,0.05); color: var(--ink-70);
+          border: 1px solid var(--ink-10);
+          backdrop-filter: blur(8px);
+        }
+        .lp__btn--ghost:hover { background: var(--ink-08); color: var(--ink); border-color: var(--ink-20); }
+        .lp__btn-arrow { width: 1rem; height: 1rem; flex-shrink: 0; transition: transform 0.2s; }
+        .lp__btn:hover .lp__btn-arrow { transform: translateX(3px); }
+
+        /* ─ Hero ─────────────────────────────────────────── */
+        .lp__hero {
+          position: relative; z-index: 10;
+          min-height: 90vh;
+          display: flex; align-items: center; justify-content: center;
+          padding: 6rem 1.25rem 4rem;
+          overflow: hidden;
+        }
+        @media(min-width: 1024px) {
+          .lp__hero { padding: 9rem 1.5rem 6rem; }
+        }
+        .lp__hero-inner {
+          max-width: 72rem; margin: 0 auto; text-align: center;
+          display: flex; flex-direction: column; align-items: center;
+        }
+
+        /* Floating cards */
+        .lp__float {
+          position: absolute; z-index: 20;
+          display: flex; align-items: center; gap: 0.75rem;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.10);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border-radius: 1rem;
+          padding: 0.75rem 1rem;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.40);
+          animation: floatCard 6s ease-in-out infinite;
+        }
+        .lp__float--tl { top: 20%; left: 2%; animation-delay: 0s; }
+        .lp__float--tr { top: 24%; right: 2%; animation-delay: 2s; }
+        .lp__float--bl { bottom: 14%; left: 4%; animation-delay: 4s; }
+        @keyframes floatCard {
+          0%,100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+        .lp__float-icon { font-size: 1.5rem; line-height: 1; flex-shrink: 0; }
+        .lp__float-val { font-size: 0.75rem; font-weight: 700; color: var(--ink-80); margin: 0; line-height: 1.3; }
+        .lp__float-sub { font-size: 0.7rem; font-weight: 500; color: var(--ink-50); margin: 0; line-height: 1.3; }
+        .lp__float-sub--g { color: var(--g); }
+        @media(max-width: 1100px) { .lp__float { display: none; } }
+
+        /* Badge */
+        .lp__badge {
+          display: inline-flex; align-items: center; gap: 0.5rem;
+          padding: 0.375rem 1rem; border-radius: var(--pill);
+          border: 1px solid var(--g-border); background: var(--g-dim2);
+          color: var(--g); font-size: 0.75rem; font-weight: 700;
+          letter-spacing: 0.04em; margin-bottom: 2rem;
+          box-shadow: 0 0 16px rgba(0,191,99,0.12);
+        }
+        .lp__badge-dot {
+          width: 6px; height: 6px; border-radius: 9999px;
+          background: var(--g); flex-shrink: 0;
+          box-shadow: 0 0 6px 2px rgba(0,191,99,0.6);
+          animation: dotPing 2s ease-in-out infinite;
+        }
+        @keyframes dotPing {
+          0%,100% { box-shadow: 0 0 6px 2px rgba(0,191,99,0.5); transform: scale(1); }
+          50%      { box-shadow: 0 0 12px 5px rgba(0,191,99,0.85); transform: scale(1.15); }
+        }
+
+        /* Headline */
+        .lp__headline {
+          display: flex; flex-direction: column; align-items: center;
+          font-weight: 900; letter-spacing: -0.028em; color: var(--ink);
+          margin: 0 0 1.75rem; line-height: 1.10;
+        }
+        .lp__headline-line {
+          font-size: clamp(1.5rem, 6vw, 3rem);
+          display: block; color: var(--ink-80);
+        }
+        .lp__headline-word {
+          display: block;
+          font-size: clamp(3.5rem, 15vw, 9rem);
+          line-height: 1.0;
+          letter-spacing: -0.05em;
+          background: linear-gradient(130deg, #00bf63 0%, #00e87a 40%, #34d399 65%, #ffffff 100%);
+          -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent;
+          margin-top: 0.1em;
+          filter: drop-shadow(0 0 40px rgba(0,191,99,0.35));
+        }
+
+        .lp__sub {
+          font-size: clamp(1rem, 1.8vw, 1.2rem); color: var(--ink-50);
+          line-height: 1.75; max-width: 48rem; margin: 0 0 2.25rem;
+          font-weight: 400;
+        }
+        .lp__ctas { display: flex; flex-wrap: wrap; gap: 0.875rem; align-items: center; justify-content: center; }
+
+        /* Trust row */
+        .lp__trust {
+          display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+          gap: 0.75rem; margin-top: 2.25rem;
+          max-width: 22rem; margin-inline: auto;
+        }
+        @media(min-width: 640px) {
+          .lp__trust { max-width: none; }
+        }
+        .lp__trust-item {
+          display: flex; align-items: center; gap: 0.35rem;
+          font-size: 0.75rem; font-weight: 600; color: var(--ink-45);
+          letter-spacing: 0.01em;
+        }
+        .lp__trust-icon { width: 0.8rem; height: 0.8rem; opacity: 0.6; }
+        .lp__trust-dot { width: 3px; height: 3px; border-radius: 9999px; background: var(--ink-20); }
+
+        /* ─ Video ─────────────────────────────────────────── */
+        .lp__video-wrap {
+          position: relative; z-index: 10;
+          padding: 0 1.25rem 4rem;
+          display: flex; flex-direction: column; align-items: center; gap: 2rem;
+        }
+        @media(min-width: 1024px) {
+          .lp__video-wrap { padding: 0 1.5rem 6rem; gap: 3rem; }
+        }
+        .lp__video-header {
+          max-width: 42rem; text-align: center;
+          display: flex; flex-direction: column; gap: 0.75rem;
+        }
+        .lp__video-shell {
+          width: 100%; max-width: 72rem; position: relative;
+          border-radius: var(--r-2xl);
+          border: 1px solid rgba(255,255,255,0.10);
+          background: rgba(255,255,255,0.03);
+          box-shadow:
+            0 50px 120px rgba(0,0,0,0.70),
+            0 0 0 1px rgba(255,255,255,0.04),
+            0 0 60px rgba(0,191,99,0.06);
+          overflow: hidden;
+        }
+        .lp__video-shine {
+          position: absolute; left: 10%; right: 10%; top: 0; height: 1px;
+          background: linear-gradient(to right, transparent, rgba(255,255,255,0.30), transparent);
+          pointer-events: none; z-index: 2;
+        }
+        .lp__video-topbar {
+          display: flex; align-items: center; gap: 0.5rem;
+          padding: 0.75rem 1.125rem;
+          background: rgba(255,255,255,0.03);
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          position: relative; z-index: 2;
+        }
+        .lp__video-dot {
+          width: 12px; height: 12px; border-radius: 9999px; flex-shrink: 0;
+        }
+        .lp__video-dot--r { background: #ff5f57; }
+        .lp__video-dot--y { background: #febc2e; }
+        .lp__video-dot--g { background: #28c840; }
+        .lp__video-title {
+          margin-left: auto; margin-right: auto;
+          font-size: 0.75rem; font-weight: 600; color: var(--ink-30, rgba(255,255,255,0.30));
+          letter-spacing: 0.02em;
+        }
+        .lp__video-inner {
+          aspect-ratio: 16/9; background: #040507;
+        }
+        .lp__video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        /* ─ Stats ─────────────────────────────────────────── */
+        .lp__stats-section {
+          position: relative; z-index: 10;
+          padding: 3rem 0 5rem;
+        }
+        .lp__stats-grid {
+          display: grid;
+          grid-template-columns: repeat(1, 1fr);
+          gap: 1px;
+          background: var(--ink-08);
+          border-radius: var(--r-xl);
+          overflow: hidden;
+          border: 1px solid var(--ink-08);
+        }
+        @media(min-width: 640px) {
+          .lp__stats-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        .lp__stat {
+          background: rgba(6,7,10,0.95);
+          padding: 2.5rem 2rem;
+          text-align: center;
+          position: relative;
+          overflow: hidden;
+          transition: background 0.25s;
+        }
+        .lp__stat::before {
+          content: ''; position: absolute; inset: 0;
+          background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,191,99,0.07) 0%, transparent 70%);
+          opacity: 0; transition: opacity 0.3s;
+        }
+        .lp__stat:hover { background: rgba(0,191,99,0.04); }
+        .lp__stat:hover::before { opacity: 1; }
+        .lp__stat-num {
+          display: flex; align-items: baseline; justify-content: center; gap: 0.1em;
+          margin-bottom: 0.5rem;
+        }
+        .lp__stat-val {
+          font-size: clamp(2.5rem, 5vw, 3.75rem); font-weight: 900;
+          letter-spacing: -0.04em;
+          background: linear-gradient(130deg, var(--g) 0%, var(--g-bright) 100%);
+          -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent;
+          line-height: 1;
+        }
+        .lp__stat-suffix {
+          font-size: clamp(1.5rem, 3vw, 2.25rem); font-weight: 900;
+          background: linear-gradient(130deg, var(--g) 0%, var(--g-bright) 100%);
+          -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent;
+          letter-spacing: -0.02em;
+        }
+        .lp__stat-label {
+          font-size: 0.8125rem; color: var(--ink-45); line-height: 1.5; margin: 0;
+          max-width: 16rem; margin-inline: auto; font-weight: 500;
+        }
+
+        /* ─ Problem / Solution ───────────────────────────── */
+        .lp__ps {
+          position: relative; z-index: 10;
+          padding: 4rem 0;
+          border-top: 1px solid var(--ink-08);
+          border-bottom: 1px solid var(--ink-08);
+          background:
+            linear-gradient(180deg, rgba(0,191,99,0.03) 0%, transparent 50%),
+            linear-gradient(0deg, rgba(99,102,241,0.03) 0%, transparent 50%);
+        }
+        @media(min-width: 1024px) {
+          .lp__ps { padding: 6rem 0; }
+        }
+        .lp__ps-inner {
+          display: flex; flex-direction: column; gap: 4rem;
+        }
+        @media(min-width: 1024px) {
+          .lp__ps-inner { flex-direction: row; align-items: center; gap: 5rem; }
+        }
+        .lp__ps-left, .lp__ps-right { flex: 1; }
+
+        .lp__eyebrow {
+          font-size: 0.6875rem; font-weight: 800; letter-spacing: 0.20em;
+          text-transform: uppercase; color: var(--g); margin: 0 0 1rem;
+        }
+        .lp__section-title {
+          font-size: clamp(1.875rem, 3.8vw, 3rem);
+          font-weight: 900; line-height: 1.10; letter-spacing: -0.028em;
+          color: var(--ink); margin: 0 0 2rem;
+        }
+        .lp__muted { color: var(--ink-20); }
+        .lp__green { color: var(--g); }
+
+        .lp__problems { display: flex; flex-direction: column; gap: 1.25rem; }
+        .lp__problem {
+          display: flex; gap: 1rem; align-items: flex-start;
+          padding: 1.125rem; border-radius: 0.875rem;
+          border: 1px solid transparent;
+          transition: background 0.25s, border-color 0.25s, transform 0.25s;
+          cursor: default;
+        }
+        .lp__problem:hover {
+          background: rgba(255,255,255,0.03);
+          border-color: var(--ink-08);
+          transform: translateX(4px);
+        }
+        .lp__problem-icon {
+          font-size: 1.5rem; line-height: 1; flex-shrink: 0; margin-top: 1px;
+          filter: grayscale(40%) opacity(0.75);
+          transition: filter 0.25s;
+        }
+        .lp__problem:hover .lp__problem-icon { filter: none; }
+        .lp__problem-title {
+          font-size: 0.9375rem; font-weight: 700; color: var(--ink-70); margin: 0 0 0.25rem;
+        }
+        .lp__problem-desc {
+          font-size: 0.875rem; color: var(--ink-45); line-height: 1.65; margin: 0;
+        }
+
+        /* Solution card */
+        .lp__sol-card {
+          position: relative; overflow: hidden;
+          border-radius: var(--r-2xl);
+          border: 1px solid var(--g-border);
+          background: linear-gradient(145deg, rgba(0,191,99,0.08) 0%, rgba(0,0,0,0) 60%);
+          transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+          box-shadow: 0 0 0 0 rgba(0,191,99,0);
+        }
+        .lp__sol-card:hover {
+          border-color: rgba(0,191,99,0.40);
+          transform: translateY(-4px);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.50), 0 0 40px rgba(0,191,99,0.10);
+        }
+        .lp__sol-glow {
+          position: absolute; top: -6rem; right: -6rem;
+          width: 22rem; height: 22rem; border-radius: 9999px;
+          background: radial-gradient(circle, rgba(0,191,99,0.20) 0%, transparent 65%);
+          filter: blur(50px); pointer-events: none;
+        }
+        /* shimmer line */
+        .lp__sol-shimmer {
+          position: absolute; left: 10%; right: 10%; top: 0; height: 1px;
+          background: linear-gradient(to right, transparent, rgba(0,191,99,0.40), transparent);
+          pointer-events: none;
+        }
+        .lp__sol-body { position: relative; z-index: 1; padding: 2.5rem; }
+        .lp__tag {
+          display: inline-flex; align-items: center;
+          padding: 0.25rem 0.75rem; border-radius: var(--pill);
+          border: 1px solid var(--g-border); background: var(--g-dim);
+          color: var(--g); font-size: 0.6875rem; font-weight: 800;
+          letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1.25rem;
+        }
+        .lp__sol-title {
+          font-size: 1.875rem; font-weight: 900; letter-spacing: -0.025em;
+          color: var(--ink); margin: 0 0 1.75rem;
+        }
+        .lp__features { list-style: none; padding: 0; margin: 0 0 2rem; display: flex; flex-direction: column; gap: 0.875rem; }
+        .lp__feature {
+          display: flex; align-items: center; gap: 0.875rem;
+          font-size: 0.9375rem; font-weight: 500; color: var(--ink-70);
+          padding: 0.625rem 0;
+          border-bottom: 1px solid var(--ink-05);
+        }
+        .lp__feature:last-child { border-bottom: none; }
+        .lp__feature-icon { font-size: 1.125rem; line-height: 1; flex-shrink: 0; }
+        .lp__sol-cta { margin-top: 0.5rem; }
+
+        /* ─ How it works ─────────────────────────────────── */
+        .lp__hiw {
+          position: relative; z-index: 10;
+          padding: 7rem 0;
+        }
+        .lp__section-header {
+          text-align: center; max-width: 38rem; margin: 0 auto 4rem;
+        }
+        .lp__section-sub {
+          font-size: 1rem; color: var(--ink-45); line-height: 1.7; margin: 0.875rem 0 0;
+        }
+
+        .lp__steps {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1px;
+          background: var(--ink-08);
+          border-radius: var(--r-xl);
+          overflow: hidden;
+          border: 1px solid var(--ink-08);
+        }
+        @media(min-width: 640px) {
+          .lp__steps { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media(min-width: 1024px) {
+          .lp__steps { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        .lp__step {
+          position: relative;
+          background: var(--bg);
+          padding: 2.25rem;
+          display: flex; flex-direction: column;
+          transition: background 0.30s, transform 0.30s;
+          overflow: hidden;
+        }
+        .lp__step::before {
+          content: '';
+          position: absolute; top: 0; left: 0; right: 0;
+          height: 3px;
+          background: linear-gradient(to right, var(--step-color, var(--g-dim)), transparent);
+          opacity: 0; transition: opacity 0.3s;
+        }
+        .lp__step:hover { background: rgba(255,255,255,0.028); }
+        .lp__step:hover::before { opacity: 1; }
+
+        /* Step inner glow on hover */
+        .lp__step::after {
+          content: '';
+          position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+          background: radial-gradient(ellipse 80% 50% at 50% 0%, var(--step-color, var(--g-dim)) 0%, transparent 70%);
+          opacity: 0; transition: opacity 0.35s;
+          pointer-events: none;
+        }
+        .lp__step:hover::after { opacity: 1; }
+
+        .lp__step-bar {
+          position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+          background: linear-gradient(to right, var(--step-glow, var(--g-glow)), transparent);
+          transform: scaleX(0); transform-origin: left;
+          transition: transform 0.4s cubic-bezier(0.16,1,0.3,1);
+        }
+        .lp__step:hover .lp__step-bar { transform: scaleX(1); }
+
+        .lp__step-top {
+          display: flex; align-items: flex-start; justify-content: space-between;
+          margin-bottom: 1.5rem; position: relative; z-index: 1;
+        }
+        .lp__step-icon {
+          display: flex; align-items: center; justify-content: center;
+          width: 3rem; height: 3rem; border-radius: 0.875rem;
+          background: var(--step-color, var(--g-dim));
+          border: 1px solid rgba(255,255,255,0.10);
+          transition: background 0.30s, transform 0.30s, box-shadow 0.30s;
+        }
+        .lp__step:hover .lp__step-icon {
+          transform: scale(1.08) rotate(-3deg);
+          box-shadow: 0 8px 24px var(--step-glow, var(--g-glow));
+        }
+        .lp__step-emoji { font-size: 1.375rem; line-height: 1; display: block; }
+        .lp__step-num {
+          font-size: 2rem; font-weight: 900;
+          color: rgba(255,255,255,0.06); letter-spacing: -0.05em;
+          user-select: none; line-height: 1;
+          transition: color 0.25s;
+        }
+        .lp__step:hover .lp__step-num { color: rgba(255,255,255,0.12); }
+        .lp__step-title {
+          font-size: 1rem; font-weight: 700; color: var(--ink);
+          margin: 0 0 0.5rem; letter-spacing: -0.01em;
+          position: relative; z-index: 1;
+        }
+        .lp__step-desc {
+          font-size: 0.875rem; color: var(--ink-45); line-height: 1.72; margin: 0;
+          transition: color 0.25s; flex: 1; position: relative; z-index: 1;
+        }
+        .lp__step:hover .lp__step-desc { color: var(--ink-70); }
+
+        @media(min-width: 1024px) {
+          .lp__step:nth-child(4) { border-bottom-left-radius: 0; }
+          .lp__step:nth-child(5) { grid-column: span 2; }
+        }
+
+        /* ─ Bottom CTA ───────────────────────────────────── */
+        .lp__cta-wrap {
+          position: relative; z-index: 10;
+          padding: 2rem 1.5rem 6rem;
+        }
+        .lp__cta-card {
+          position: relative; overflow: hidden;
+          border-radius: var(--r-2xl);
+          border: 1px solid rgba(0,191,99,0.18);
+          background: linear-gradient(145deg, rgba(0,191,99,0.06) 0%, rgba(6,7,10,0.95) 60%);
+          text-align: center;
+          padding: 6rem 2rem;
+          box-shadow:
+            0 0 0 1px rgba(255,255,255,0.04),
+            0 30px 80px rgba(0,0,0,0.60),
+            0 0 80px rgba(0,191,99,0.06);
+        }
+        .lp__cta-glow {
+          position: absolute; inset: 0;
+          background:
+            radial-gradient(ellipse 70% 70% at 50% -10%, rgba(0,191,99,0.16) 0%, transparent 65%),
+            radial-gradient(ellipse 40% 40% at 80% 80%, rgba(99,102,241,0.08) 0%, transparent 65%);
+          pointer-events: none;
+        }
+        .lp__cta-grid-overlay {
+          position: absolute; inset: 0;
+          background-image:
+            linear-gradient(to right,  rgba(255,255,255,0.018) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255,255,255,0.018) 1px, transparent 1px);
+          background-size: 48px 48px;
+          mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, #000 40%, transparent 80%);
+          pointer-events: none;
+        }
+        .lp__cta-body {
+          position: relative; z-index: 1;
+          display: flex; flex-direction: column; align-items: center; gap: 1.25rem;
+          max-width: 42rem; margin: 0 auto;
+        }
+        .lp__cta-title {
+          font-size: clamp(2rem, 5vw, 3.75rem);
+          font-weight: 900; letter-spacing: -0.03em;
+          color: var(--ink); line-height: 1.08; margin: 0;
+        }
+        .lp__cta-sub {
+          font-size: 1rem; color: var(--ink-50); max-width: 30rem; line-height: 1.7; margin: 0;
+        }
+        .lp__cta-fine {
+          font-size: 0.75rem; color: var(--ink-30, rgba(255,255,255,0.30));
+          margin: 0; letter-spacing: 0.02em;
+        }
+
+        /* ─ Footer ───────────────────────────────────────── */
+        .lp__footer {
+          position: relative; z-index: 10;
+          border-top: 1px solid var(--ink-08);
+          background: rgba(0,0,0,0.50);
+          padding: 3rem 0;
+        }
+        .lp__footer-inner {
+          display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.5rem;
+        }
+        .lp__footer-brand {
+          display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.625rem;
+        }
+        .lp__footer-logo { opacity: 0.25; }
+        .lp__footer-name {
+          font-size: 1rem; font-weight: 900; letter-spacing: -0.02em; color: var(--ink-20);
+        }
+        .lp__footer-contact { font-size: 0.875rem; color: var(--ink-45); margin: 0; }
+        .lp__footer-email {
+          font-size: 0.875rem; font-weight: 600; color: var(--ink-70);
+          text-decoration: none; transition: color 0.2s;
+        }
+        .lp__footer-email:hover { color: var(--g); }
+        .lp__footer-bottom {
+          margin-top: 1.75rem; padding-top: 1.5rem;
+          border-top: 1px solid var(--ink-08);
+          width: 100%;
+          display: flex; flex-direction: column; align-items: center; gap: 0.875rem;
+          font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em;
+          text-transform: uppercase; color: var(--ink-20);
+        }
+        @media(min-width: 640px) {
+          .lp__footer-bottom { flex-direction: row; justify-content: space-between; text-align: left; }
+        }
+        .lp__footer-links { display: flex; gap: 1.5rem; }
+        .lp__footer-link {
+          text-decoration: none; color: var(--ink-20); transition: color 0.2s;
+        }
+        .lp__footer-link:hover { color: var(--ink); }
       `}</style>
-    </div>
+    </main>
   );
 }

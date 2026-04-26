@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} min-h-screen bg-white text-brand-body antialiased`}>
+      <body className={`${inter.className} min-h-screen bg-black text-white/90 antialiased`}>
         <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" strategy="beforeInteractive" />
         <ToastProvider>
           {children}
