@@ -4,6 +4,16 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   async headers() {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' https://sdk.cashfree.com https://va.vercel-scripts.com",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      `connect-src 'self' https://*.supabase.co https://api.cashfree.com ${apiBaseUrl} https://va.vercel-scripts.com`,
+      "frame-ancestors 'none'",
+    ].join("; ");
+
     return [{
       source: "/(.*)",
       headers: [
@@ -12,7 +22,7 @@ const nextConfig: NextConfig = {
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         {
           key: "Content-Security-Policy",
-          value: `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co https://api.cashfree.com ${apiBaseUrl};`,
+          value: csp,
         },
       ],
     }];
