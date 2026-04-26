@@ -337,12 +337,12 @@ export function LandingPageClient({ isAuthenticated }: { isAuthenticated: boolea
 
       {/* ── Video ─────────────────────────────────────────────────────── */}
       <section className="lp__video-wrap lp__anim" style={{ animationDelay: "500ms" }}>
-        <div className="lp__video-header">
-          <p className="lp__eyebrow" style={{ textAlign: "center" }}>See it in action</p>
-          <h2 className="lp__section-title" style={{ textAlign: "center", marginBottom: "0" }}>
-            From inbox to deal, in <span className="lp__green" style={{ whiteSpace: "nowrap" }}>minutes.</span>
+        <div className="lp__video-header" style={{ textAlign: "left", alignItems: "flex-start", maxWidth: "none" }}>
+          <p className="lp__eyebrow">See it in action</p>
+          <h2 className="lp__section-title" style={{ marginBottom: "0", whiteSpace: "nowrap" }}>
+            From inbox to deal, in <span className="lp__green">minutes.</span>
           </h2>
-          <p className="lp__section-sub" style={{ textAlign: "center" }}>
+          <p className="lp__section-sub">
             Watch how Actiio detects a cold thread, drafts the perfect follow-up, and puts you back in the conversation.
           </p>
         </div>
